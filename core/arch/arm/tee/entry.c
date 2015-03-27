@@ -24,10 +24,10 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
+#include <compiler.h>
 #include <tee/entry.h>
-#include <sm/teesmc.h>
-#include <sm/teesmc_optee.h>
+#include <optee_msg.h>
+#include <sm/optee_smc.h>
 #include <kernel/tee_common_unpg.h>
 #include <kernel/tee_dispatch.h>
 #include <kernel/tee_l2cc_mutex.h>
@@ -37,16 +37,17 @@
 #include <assert.h>
 
 #define SHM_CACHE_ATTRS	\
-	(core_mmu_is_shm_cached() ? \
-		(TEESMC_ATTR_CACHE_DEFAULT << TEESMC_ATTR_CACHE_SHIFT) : 0 )
+	(uint32_t)(core_mmu_is_shm_cached() ?  OPTEE_SMC_SHM_CACHED : 0)
 
-static bool copy_in_params(const struct teesmc32_param *params,
+static bool copy_in_params(const struct optee_msg_param *params,
 		uint32_t num_params, uint32_t *param_types,
 		uint32_t param_attr[TEE_NUM_PARAMS],
 		TEE_Param tee_params[TEE_NUM_PARAMS])
 {
 	size_t n;
 	uint8_t pt[4];
+	uint32_t cache_attr;
+	uint32_t attr;
 
 	*param_types = 0;
 
@@ -54,31 +55,46 @@ static bool copy_in_params(const struct teesmc32_param *params,
 		return false;
 
 	for (n = 0; n < num_params; n++) {
-		if (params[n].attr & TEESMC_ATTR_META)
+		if (params[n].attr & OPTEE_MSG_ATTR_META)
+			return false;
+		if (params[n].attr & OPTEE_MSG_ATTR_FRAGMENT)
 			return false;
 
-		pt[n] = params[n].attr & TEESMC_ATTR_TYPE_MASK;
+		attr = params[n].attr & OPTEE_MSG_ATTR_TYPE_MASK;
 
-		param_attr[n] = (params[n].attr >> TEESMC_ATTR_CACHE_SHIFT) &
-				TEESMC_ATTR_CACHE_MASK;
-
-		switch (params[n].attr & TEESMC_ATTR_TYPE_MASK) {
-		case TEESMC_ATTR_TYPE_VALUE_INPUT:
-		case TEESMC_ATTR_TYPE_VALUE_OUTPUT:
-		case TEESMC_ATTR_TYPE_VALUE_INOUT:
+		switch (attr) {
+		case OPTEE_MSG_ATTR_TYPE_NONE:
+			pt[n] = TEE_PARAM_TYPE_NONE;
+			param_attr[n] = 0;
+			memset(tee_params + n, 0, sizeof(TEE_Param));
+			break;
+		case OPTEE_MSG_ATTR_TYPE_VALUE_INPUT:
+		case OPTEE_MSG_ATTR_TYPE_VALUE_OUTPUT:
+		case OPTEE_MSG_ATTR_TYPE_VALUE_INOUT:
+			pt[n] = TEE_PARAM_TYPE_VALUE_INPUT + attr -
+				OPTEE_MSG_ATTR_TYPE_VALUE_INPUT;
+			param_attr[n] = 0;
 			tee_params[n].value.a = params[n].u.value.a;
 			tee_params[n].value.b = params[n].u.value.b;
 			break;
-		case TEESMC_ATTR_TYPE_MEMREF_INPUT:
-		case TEESMC_ATTR_TYPE_MEMREF_OUTPUT:
-		case TEESMC_ATTR_TYPE_MEMREF_INOUT:
+		case OPTEE_MSG_ATTR_TYPE_TMEM_INPUT:
+		case OPTEE_MSG_ATTR_TYPE_TMEM_OUTPUT:
+		case OPTEE_MSG_ATTR_TYPE_TMEM_INOUT:
+			pt[n] = TEE_PARAM_TYPE_MEMREF_INPUT + attr -
+				OPTEE_MSG_ATTR_TYPE_TMEM_INPUT;
+			cache_attr =
+				(params[n].attr >> OPTEE_MSG_ATTR_CACHE_SHIFT) &
+				OPTEE_MSG_ATTR_CACHE_MASK;
+			if (cache_attr == OPTEE_MSG_ATTR_CACHE_PREDEFINED)
+				param_attr[n] = SHM_CACHE_ATTRS;
+			else
+				return false;
 			tee_params[n].memref.buffer =
-				(void *)(uintptr_t)params[n].u.memref.buf_ptr;
-			tee_params[n].memref.size = params[n].u.memref.size;
+				(void *)(uintptr_t)params[n].u.tmem.buf_ptr;
+			tee_params[n].memref.size = params[n].u.tmem.size;
 			break;
 		default:
-			memset(tee_params + n, 0, sizeof(TEE_Param));
-			break;
+			return false;
 		}
 	}
 	for (; n < TEE_NUM_PARAMS; n++) {
@@ -95,7 +111,7 @@ static bool copy_in_params(const struct teesmc32_param *params,
 
 static void copy_out_param(const TEE_Param tee_params[TEE_NUM_PARAMS],
 		uint32_t param_types, uint32_t num_params,
-		struct teesmc32_param *params)
+		struct optee_msg_param *params)
 {
 	size_t n;
 
@@ -103,7 +119,7 @@ static void copy_out_param(const TEE_Param tee_params[TEE_NUM_PARAMS],
 		switch (TEE_PARAM_TYPE_GET(param_types, n)) {
 		case TEE_PARAM_TYPE_MEMREF_OUTPUT:
 		case TEE_PARAM_TYPE_MEMREF_INOUT:
-			params[n].u.memref.size = tee_params[n].memref.size;
+			params[n].u.tmem.size = tee_params[n].memref.size;
 			break;
 		case TEE_PARAM_TYPE_VALUE_OUTPUT:
 		case TEE_PARAM_TYPE_VALUE_INOUT:
@@ -123,54 +139,41 @@ static void copy_out_param(const TEE_Param tee_params[TEE_NUM_PARAMS],
  * false : mandatory parameter wasn't found or malformatted
  * true  : paramater found and OK
  */
-static bool get_open_session_meta(struct teesmc32_arg *arg32,
+static bool get_open_session_meta(struct optee_msg_arg *arg,
 		uint32_t num_params, size_t *num_meta,
-		struct teesmc_meta_open_session **meta)
+		TEE_UUID *uuid, TEE_Identity *clnt_id)
 {
-	struct teesmc32_param *params = TEESMC32_GET_PARAMS(arg32);
-	uint32_t phmeta;
-	const uint8_t req_attr = TEESMC_ATTR_META |
-				 TEESMC_ATTR_TYPE_MEMREF_INPUT |
-				 SHM_CACHE_ATTRS;
+	struct optee_msg_param *params = OPTEE_MSG_GET_PARAMS(arg);
+	const uint32_t req_attr = OPTEE_MSG_ATTR_META |
+				  OPTEE_MSG_ATTR_TYPE_VALUE_INPUT;
 
-	if (num_params < (*num_meta + 1))
+	if (num_params < (*num_meta + 2))
 		return false;
 
-	if (params[*num_meta].attr != req_attr)
+	if (params[*num_meta].attr != req_attr ||
+	    params[*num_meta + 1].attr != req_attr)
 		return false;
 
-	if (params[*num_meta].u.memref.size !=
-			sizeof(struct teesmc_meta_open_session))
-		return false;
+	memcpy(uuid, &params[*num_meta].u.value, sizeof(TEE_UUID));
+	memcpy(&clnt_id->uuid, &params[*num_meta + 1].u.value,
+	       sizeof(TEE_UUID));
+	clnt_id->login = params[*num_meta + 1].u.value.c;
 
-	phmeta = params[*num_meta].u.memref.buf_ptr;
-	if (!tee_pbuf_is_non_sec(phmeta,
-				 sizeof(struct teesmc_meta_open_session)))
-		return false;
-
-	if (core_pa2va(phmeta, meta))
-		return false;
-
-	(*num_meta)++;
+	(*num_meta) += 2;
 	return true;
 }
 
-static void entry_open_session(struct thread_smc_args *args,
-			struct teesmc32_arg *arg32, uint32_t num_params)
+static void entry_open_session(struct thread_smc_args *smc_args,
+			struct optee_msg_arg *arg, uint32_t num_params)
 {
 	struct tee_dispatch_open_session_in in;
 	struct tee_dispatch_open_session_out out;
-	struct teesmc_meta_open_session *meta;
-	struct teesmc32_param *params = TEESMC32_GET_PARAMS(arg32);
+	struct optee_msg_param *params = OPTEE_MSG_GET_PARAMS(arg);
 	size_t num_meta = 0;
 
-	if (!get_open_session_meta(arg32, num_params, &num_meta, &meta))
+	if (!get_open_session_meta(arg, num_params, &num_meta, &in.uuid,
+				   &in.clnt_id))
 		goto bad_params;
-
-	COMPILE_TIME_ASSERT(sizeof(TEE_UUID) == TEESMC_UUID_LEN);
-	memcpy(&in.uuid, &meta->uuid, sizeof(TEE_UUID));
-	memcpy(&in.clnt_id.uuid, &meta->clnt_uuid, sizeof(TEE_UUID));
-	in.clnt_id.login = meta->clnt_login;
 
 	if (!copy_in_params(params + num_meta, num_params - num_meta,
 			    &in.param_types, in.param_attr, in.params))
@@ -181,145 +184,168 @@ static void entry_open_session(struct thread_smc_args *args,
 	copy_out_param(out.params, in.param_types, num_params - num_meta,
 		       params + num_meta);
 
-	arg32->session = (vaddr_t)out.sess;
-	arg32->ret = out.msg.res;
-	arg32->ret_origin = out.msg.err;
-	args->a0 = TEESMC_RETURN_OK;
+	arg->session = (vaddr_t)out.sess;
+	arg->ret = out.msg.res;
+	arg->ret_origin = out.msg.err;
+	smc_args->a0 = OPTEE_SMC_RETURN_OK;
 	return;
 
 bad_params:
 	DMSG("Bad params");
-	arg32->ret = TEE_ERROR_BAD_PARAMETERS;
-	arg32->ret_origin = TEE_ORIGIN_TEE;
-	args->a0 = TEESMC_RETURN_OK;
+	arg->ret = TEE_ERROR_BAD_PARAMETERS;
+	arg->ret_origin = TEE_ORIGIN_TEE;
+	smc_args->a0 = OPTEE_SMC_RETURN_OK;
 }
 
-static void entry_close_session(struct thread_smc_args *args,
-			struct teesmc32_arg *arg32, uint32_t num_params)
+static void entry_close_session(struct thread_smc_args *smc_args,
+			struct optee_msg_arg *arg, uint32_t num_params)
 {
 
 	if (num_params == 0) {
 		struct tee_close_session_in in;
 
-		in.sess = (TEE_Session *)(vaddr_t)arg32->session;
-		arg32->ret = tee_dispatch_close_session(&in);
+		in.sess = (TEE_Session *)(uintptr_t)arg->session;
+		arg->ret = tee_dispatch_close_session(&in);
 	} else {
-		arg32->ret = TEE_ERROR_BAD_PARAMETERS;
+		arg->ret = TEE_ERROR_BAD_PARAMETERS;
 	}
 
-	arg32->ret_origin = TEE_ORIGIN_TEE;
-	args->a0 = TEESMC_RETURN_OK;
+	arg->ret_origin = TEE_ORIGIN_TEE;
+	smc_args->a0 = OPTEE_SMC_RETURN_OK;
 }
 
-static void entry_invoke_command(struct thread_smc_args *args,
-			struct teesmc32_arg *arg32, uint32_t num_params)
+static void entry_invoke_command(struct thread_smc_args *smc_args,
+			struct optee_msg_arg *arg, uint32_t num_params)
 {
 	struct tee_dispatch_invoke_command_in in;
 	struct tee_dispatch_invoke_command_out out;
-	struct teesmc32_param *params = TEESMC32_GET_PARAMS(arg32);
+	struct optee_msg_param *params = OPTEE_MSG_GET_PARAMS(arg);
 
 	if (!copy_in_params(params, num_params,
 			 &in.param_types, in.param_attr, in.params)) {
-		arg32->ret = TEE_ERROR_BAD_PARAMETERS;
-		arg32->ret_origin = TEE_ORIGIN_TEE;
-		args->a0 = TEESMC_RETURN_OK;
+		arg->ret = TEE_ERROR_BAD_PARAMETERS;
+		arg->ret_origin = TEE_ORIGIN_TEE;
+		smc_args->a0 = OPTEE_SMC_RETURN_OK;
 		return;
 	}
 
-	in.sess = (TEE_Session *)(vaddr_t)arg32->session;
-	in.cmd = arg32->ta_func;
+	in.sess = (TEE_Session *)(vaddr_t)arg->session;
+	in.cmd = arg->func;
 	(void)tee_dispatch_invoke_command(&in, &out);
 
 	copy_out_param(out.params, in.param_types, num_params, params);
 
-	arg32->ret = out.msg.res;
-	arg32->ret_origin = out.msg.err;
-	args->a0 = TEESMC_RETURN_OK;
+	arg->ret = out.msg.res;
+	arg->ret_origin = out.msg.err;
+	smc_args->a0 = OPTEE_SMC_RETURN_OK;
 }
 
-static void entry_cancel(struct thread_smc_args *args,
-			struct teesmc32_arg *arg32, uint32_t num_params)
+static void entry_cancel(struct thread_smc_args *smc_args,
+			struct optee_msg_arg *arg, uint32_t num_params)
 {
 
 	if (num_params == 0) {
 		struct tee_dispatch_cancel_command_in in;
 		struct tee_dispatch_cancel_command_out out;
 
-		in.sess = (TEE_Session *)(vaddr_t)arg32->session;
+		in.sess = (TEE_Session *)(vaddr_t)arg->session;
 		(void)tee_dispatch_cancel_command(&in, &out);
-		arg32->ret = out.msg.res;
-		arg32->ret_origin = out.msg.err;
+		arg->ret = out.msg.res;
+		arg->ret_origin = out.msg.err;
 	} else {
-		arg32->ret = TEE_ERROR_BAD_PARAMETERS;
-		arg32->ret_origin = TEE_ORIGIN_TEE;
+		arg->ret = TEE_ERROR_BAD_PARAMETERS;
+		arg->ret_origin = TEE_ORIGIN_TEE;
 	}
 
-	args->a0 = TEESMC_RETURN_OK;
+	smc_args->a0 = OPTEE_SMC_RETURN_OK;
 }
 
-static void tee_entry_call_with_arg(struct thread_smc_args *args)
+
+
+static void tee_entry_call_with_arg(struct thread_smc_args *smc_args)
 {
-	paddr_t arg_pa;
-	struct teesmc32_arg *arg32 = NULL;	/* fix gcc warning */
+	paddr_t parg;
+	struct optee_msg_arg *arg = NULL;	/* fix gcc warning */
 	uint32_t num_params;
 
-	if (args->a0 != TEESMC32_CALL_WITH_ARG &&
-	    args->a0 != TEESMC32_FASTCALL_WITH_ARG) {
-		EMSG("Unknown SMC 0x%" PRIx64, (uint64_t)args->a0);
-		DMSG("Expected 0x%x or 0x%x\n",
-		     TEESMC32_CALL_WITH_ARG, TEESMC32_FASTCALL_WITH_ARG);
-		args->a0 = TEESMC_RETURN_UNKNOWN_FUNCTION;
+	parg = (uint64_t)smc_args->a1 << 32 | smc_args->a2;
+	if (!tee_pbuf_is_non_sec(parg, sizeof(struct optee_msg_arg)) ||
+	    !TEE_ALIGNMENT_IS_OK(parg, struct optee_msg_arg) ||
+	    core_pa2va(parg, &arg)) {
+		EMSG("Bad arg address 0x%" PRIxPA, parg);
+		smc_args->a0 = OPTEE_SMC_RETURN_EBADADDR;
 		return;
 	}
 
-	arg_pa = args->a1;
-	if (!tee_pbuf_is_non_sec(arg_pa, sizeof(struct teesmc32_arg)) ||
-	    !TEE_ALIGNMENT_IS_OK(arg_pa, struct teesmc32_arg) ||
-	    core_pa2va(arg_pa, &arg32)) {
-		EMSG("Bad arg address 0x%" PRIxPA, arg_pa);
-		args->a0 = TEESMC_RETURN_EBADADDR;
+	num_params = arg->num_params;
+	if (!tee_pbuf_is_non_sec(parg, OPTEE_MSG_GET_ARG_SIZE(num_params))) {
+		EMSG("Bad arg address 0x%" PRIxPA, parg);
+		smc_args->a0 = OPTEE_SMC_RETURN_EBADADDR;
 		return;
 	}
 
-	num_params = arg32->num_params;
-	if (!tee_pbuf_is_non_sec(arg_pa, TEESMC32_GET_ARG_SIZE(num_params))) {
-		EMSG("Bad arg address 0x%" PRIxPA, arg_pa);
-		args->a0 = TEESMC_RETURN_EBADADDR;
-		return;
-	}
-
-	if (args->a0 == TEESMC32_CALL_WITH_ARG) {
+	if (smc_args->a0 == OPTEE_SMC_CALL_WITH_ARG) {
 		thread_set_irq(true);	/* Enable IRQ for STD calls */
-		switch (arg32->cmd) {
-		case TEESMC_CMD_OPEN_SESSION:
-			entry_open_session(args, arg32, num_params);
+		switch (arg->cmd) {
+		case OPTEE_MSG_CMD_OPEN_SESSION:
+			entry_open_session(smc_args, arg, num_params);
 			break;
-		case TEESMC_CMD_CLOSE_SESSION:
-			entry_close_session(args, arg32, num_params);
+		case OPTEE_MSG_CMD_CLOSE_SESSION:
+			entry_close_session(smc_args, arg, num_params);
 			break;
-		case TEESMC_CMD_INVOKE_COMMAND:
-			entry_invoke_command(args, arg32, num_params);
+		case OPTEE_MSG_CMD_INVOKE_COMMAND:
+			entry_invoke_command(smc_args, arg, num_params);
 			break;
-		case TEESMC_CMD_CANCEL:
-			entry_cancel(args, arg32, num_params);
+		case OPTEE_MSG_CMD_CANCEL:
+			entry_cancel(smc_args, arg, num_params);
 			break;
 		default:
-			EMSG("Unknown cmd 0x%x\n", arg32->cmd);
-			args->a0 = TEESMC_RETURN_EBADCMD;
+			EMSG("Unknown cmd 0x%x\n", arg->cmd);
+			smc_args->a0 = OPTEE_SMC_RETURN_EBADCMD;
 		}
 	} else {
-		EMSG("Unknown fastcall cmd 0x%x\n", arg32->cmd);
-		args->a0 = TEESMC_RETURN_EBADCMD;
+		EMSG("Unknown fastcall cmd 0x%x\n", arg->cmd);
+		smc_args->a0 = OPTEE_SMC_RETURN_EBADCMD;
 	}
 }
+
+#if 0
+static void tee_entry_register_shm(struct thread_smc_args *args)
+{
+#if 0
+	switch (tee_mmu_register_shm(args->a1, args->a2, args->a3)) {
+	case TEE_SUCCESS:
+		smc_args->a0 = OPTEE_SMC_RETURN_OK;
+		break;
+	case TEE_ERROR_BAD_PARAMETERS:
+		smc_args->a0 = OPTEE_SMC_RETURN_EBADADDR;
+		break;
+	case TEE_ERROR_BUSY:
+		smc_args->a0 = OPTEE_SMC_RETURN_EBUSY;
+		break;
+	default:
+		smc_args->a0 = OPTEE_SMC_RETURN_EBADCMD;
+		break;
+	}
+#else
+	EMSG("Unavailable smc 0x%" PRIx64, (uint64_t)args->a0);
+	args->a0 = OPTEE_SMC_RETURN_EBADCMD;
+#endif
+}
+
+static void tee_entry_unregister_shm(struct thread_smc_args *args)
+{
+	EMSG("Unavailable smc 0x%" PRIx64 , (uint64_t)args->a0);
+	args->a0 = OPTEE_SMC_RETURN_EBADCMD;
+}
+#endif
 
 static void tee_entry_get_shm_config(struct thread_smc_args *args)
 {
-	args->a0 = TEESMC_RETURN_OK;
+	args->a0 = OPTEE_SMC_RETURN_OK;
 	args->a1 = default_nsec_shm_paddr;
 	args->a2 = default_nsec_shm_size;
-	/* Should this be TEESMC cache attributes instead? */
-	args->a3 = core_mmu_is_shm_cached();
+	args->a3 = SHM_CACHE_ATTRS;
 }
 
 static void tee_entry_fastcall_l2cc_mutex(struct thread_smc_args *args)
@@ -328,67 +354,123 @@ static void tee_entry_fastcall_l2cc_mutex(struct thread_smc_args *args)
 
 #ifdef ARM32
 	switch (args->a1) {
-	case TEESMC_OPTEE_L2CC_MUTEX_GET_ADDR:
+	case OPTEE_SMC_L2CC_MUTEX_GET_ADDR:
 		ret = tee_get_l2cc_mutex(&args->a2);
 		break;
-	case TEESMC_OPTEE_L2CC_MUTEX_SET_ADDR:
+	case OPTEE_SMC_L2CC_MUTEX_SET_ADDR:
 		ret = tee_set_l2cc_mutex(&args->a2);
 		break;
-	case TEESMC_OPTEE_L2CC_MUTEX_ENABLE:
+	case OPTEE_SMC_L2CC_MUTEX_ENABLE:
 		ret = tee_enable_l2cc_mutex();
 		break;
-	case TEESMC_OPTEE_L2CC_MUTEX_DISABLE:
+	case OPTEE_SMC_L2CC_MUTEX_DISABLE:
 		ret = tee_disable_l2cc_mutex();
 		break;
 	default:
-		args->a0 = TEESMC_RETURN_EBADCMD;
+		args->a0 = OPTEE_SMC_RETURN_EBADCMD;
 		return;
 	}
 #else
 	ret = TEE_ERROR_NOT_SUPPORTED;
 #endif
 	if (ret == TEE_ERROR_NOT_SUPPORTED)
-		args->a0 = TEESMC_RETURN_UNKNOWN_FUNCTION;
+		args->a0 = OPTEE_SMC_RETURN_UNKNOWN_FUNCTION;
 	else if (ret)
-		args->a0 = TEESMC_RETURN_EBADADDR;
+		args->a0 = OPTEE_SMC_RETURN_EBADADDR;
 	else
-		args->a0 = TEESMC_RETURN_OK;
+		args->a0 = OPTEE_SMC_RETURN_OK;
+}
+
+static void tee_entry_exchange_capabilities(struct thread_smc_args *args)
+{
+	if (args->a1) {
+		/*
+		 * Either unknown capability or
+		 * OPTEE_SMC_NSEC_CAP_UNIPROCESSOR, in either case we can't
+		 * deal with it.
+		 */
+		args->a0 = OPTEE_SMC_RETURN_ENOTAVAIL;
+		return;
+	}
+
+	args->a0 = OPTEE_SMC_RETURN_OK;
+	args->a1 = OPTEE_SMC_SEC_CAP_HAVE_RESERVERED_SHM;
+}
+
+static void tee_entry_disable_shm_cache(struct thread_smc_args *args)
+{
+	bool is_empty;
+	uint64_t cookie;
+
+	if (!thread_disable_prealloc_rpc_cache(&is_empty, &cookie)) {
+		args->a0 = OPTEE_SMC_RETURN_EBUSY;
+		return;
+	}
+
+	if (is_empty) {
+		args->a0 = OPTEE_SMC_RETURN_ENOTAVAIL;
+		return;
+	}
+
+	args->a0 = OPTEE_SMC_RETURN_OK;
+	args->a1 = cookie >> 32;
+	args->a2 = cookie;
+}
+
+static void tee_entry_enable_shm_cache(struct thread_smc_args *args)
+{
+	if (thread_enable_prealloc_rpc_cache())
+		args->a0 = OPTEE_SMC_RETURN_OK;
+	else
+		args->a0 = OPTEE_SMC_RETURN_EBUSY;
 }
 
 void tee_entry(struct thread_smc_args *args)
 {
 	switch (args->a0) {
-
-	/* Generic functions */
-	case TEESMC32_CALLS_COUNT:
+	case OPTEE_SMC_CALLS_COUNT:
 		tee_entry_get_api_call_count(args);
 		break;
-	case TEESMC32_CALLS_UID:
+	case OPTEE_SMC_CALLS_UID:
 		tee_entry_get_api_uuid(args);
 		break;
-	case TEESMC32_CALLS_REVISION:
+	case OPTEE_SMC_CALLS_REVISION:
 		tee_entry_get_api_revision(args);
 		break;
-	case TEESMC32_CALL_GET_OS_UUID:
+	case OPTEE_SMC_CALL_GET_OS_UUID:
 		tee_entry_get_os_uuid(args);
 		break;
-	case TEESMC32_CALL_GET_OS_REVISION:
+	case OPTEE_SMC_CALL_GET_OS_REVISION:
 		tee_entry_get_os_revision(args);
 		break;
-	case TEESMC32_CALL_WITH_ARG:
-	case TEESMC64_CALL_WITH_ARG:
+	case OPTEE_SMC_CALL_WITH_ARG:
 		tee_entry_call_with_arg(args);
 		break;
-
-	/* OP-TEE specific SMC functions */
-	case TEESMC32_OPTEE_FASTCALL_GET_SHM_CONFIG:
+	case OPTEE_SMC_GET_SHM_CONFIG:
 		tee_entry_get_shm_config(args);
 		break;
-	case TEESMC32_OPTEE_FASTCALL_L2CC_MUTEX:
+	case OPTEE_SMC_L2CC_MUTEX:
 		tee_entry_fastcall_l2cc_mutex(args);
 		break;
+#if 0
+	case OPTEE_SMC_REGISTER_SHM:
+		tee_entry_register_shm(args);
+		break;
+	case OPTEE_SMC_UNREGISTER_SHM:
+		tee_entry_unregister_shm(args);
+		break;
+#endif
+	case OPTEE_SMC_EXCHANGE_CAPABILITIES:
+		tee_entry_exchange_capabilities(args);
+		break;
+	case OPTEE_SMC_DISABLE_SHM_CACHE:
+		tee_entry_disable_shm_cache(args);
+		break;
+	case OPTEE_SMC_ENABLE_SHM_CACHE:
+		tee_entry_enable_shm_cache(args);
+		break;
 	default:
-		args->a0 = TEESMC_RETURN_UNKNOWN_FUNCTION;
+		args->a0 = OPTEE_SMC_RETURN_UNKNOWN_FUNCTION;
 		break;
 	}
 }
@@ -410,28 +492,28 @@ void __weak tee_entry_get_api_call_count(struct thread_smc_args *args)
 
 void __weak tee_entry_get_api_uuid(struct thread_smc_args *args)
 {
-	args->a0 = TEESMC_OPTEE_UID_R0;
-	args->a1 = TEESMC_OPTEE_UID_R1;
-	args->a2 = TEESMC_OPTEE_UID_R2;
-	args->a3 = TEESMC_OPTEE_UID32_R3;
+	args->a0 = OPTEE_MSG_UID_0;
+	args->a1 = OPTEE_MSG_UID_1;
+	args->a2 = OPTEE_MSG_UID_2;
+	args->a3 = OPTEE_MSG_UID_3;
 }
 
 void __weak tee_entry_get_api_revision(struct thread_smc_args *args)
 {
-	args->a0 = TEESMC_OPTEE_REVISION_MAJOR;
-	args->a1 = TEESMC_OPTEE_REVISION_MINOR;
+	args->a0 = OPTEE_MSG_REVISION_MAJOR;
+	args->a1 = OPTEE_MSG_REVISION_MINOR;
 }
 
 void __weak tee_entry_get_os_uuid(struct thread_smc_args *args)
 {
-	args->a0 = TEESMC_OS_OPTEE_UUID_R0;
-	args->a1 = TEESMC_OS_OPTEE_UUID_R1;
-	args->a2 = TEESMC_OS_OPTEE_UUID_R2;
-	args->a3 = TEESMC_OS_OPTEE_UUID_R3;
+	args->a0 = OPTEE_MSG_OS_OPTEE_UUID_0;
+	args->a1 = OPTEE_MSG_OS_OPTEE_UUID_1;
+	args->a2 = OPTEE_MSG_OS_OPTEE_UUID_2;
+	args->a3 = OPTEE_MSG_OS_OPTEE_UUID_3;
 }
 
 void __weak tee_entry_get_os_revision(struct thread_smc_args *args)
 {
-	args->a0 = TEESMC_OS_OPTEE_REVISION_MAJOR;
-	args->a1 = TEESMC_OS_OPTEE_REVISION_MINOR;
+	args->a0 = OPTEE_MSG_OS_OPTEE_REVISION_MAJOR;
+	args->a1 = OPTEE_MSG_OS_OPTEE_REVISION_MINOR;
 }

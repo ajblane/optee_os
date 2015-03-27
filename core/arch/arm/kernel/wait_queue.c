@@ -24,13 +24,13 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <compiler.h>
 #include <types_ext.h>
-#include <sm/teesmc.h>
+#include <optee_msg.h>
 #include <kernel/tz_proc.h>
 #include <kernel/wait_queue.h>
 #include <kernel/tee_ta_manager.h>
 #include <kernel/thread.h>
-#include <kernel/tee_rpc.h>
 #include <trace.h>
 
 static unsigned wq_spin_lock;
@@ -41,29 +41,24 @@ void wq_init(struct wait_queue *wq)
 	*wq = (struct wait_queue)WAIT_QUEUE_INITIALIZER;
 }
 
-static void wq_rpc(uint32_t cmd, int id)
+static void wq_rpc(uint32_t func, int id)
 {
-	uint32_t ret;
 	struct tee_ta_session *sess = NULL;
-	struct teesmc32_param params[2];
+	struct optee_msg_param params;
 
 	DMSG("%s thread %u",
-	     cmd == TEE_RPC_WAIT_QUEUE_SLEEP ? "sleep" : "wake ", id);
+	     func == OPTEE_MSG_RPC_WAIT_QUEUE_SLEEP ? "sleep" : "wake ", id);
 
 	tee_ta_get_current_session(&sess);
 	if (sess)
 		tee_ta_set_current_session(NULL);
 
-	memset(params, 0, sizeof(params));
-	params[0].attr = TEESMC_ATTR_TYPE_VALUE_INPUT;
-	params[1].attr = TEESMC_ATTR_TYPE_NONE;
-	params[0].u.value.a = id;
+	memset(&params, 0, sizeof(params));
+	params.attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT;
+	params.u.value.a = func;
+	params.u.value.b = id;
 
-	ret = thread_rpc_cmd(cmd, 2, params);
-	if (ret != TEE_SUCCESS)
-		DMSG("%s thread %u ret 0x%x",
-		     cmd == TEE_RPC_WAIT_QUEUE_SLEEP ? "sleep" : "wake ", id,
-		     ret);
+	thread_rpc_cmd(OPTEE_MSG_RPC_CMD_WAIT_QUEUE, 1, &params);
 
 	if (sess)
 		tee_ta_set_current_session(sess);
@@ -107,7 +102,7 @@ void wq_wait_final(struct wait_queue *wq, struct wait_queue_elem *wqe)
 	unsigned done;
 
 	do {
-		wq_rpc(TEE_RPC_WAIT_QUEUE_SLEEP, wqe->handle);
+		wq_rpc(OPTEE_MSG_RPC_WAIT_QUEUE_SLEEP, wqe->handle);
 
 		old_itr_status = thread_mask_exceptions(THREAD_EXCP_ALL);
 		cpu_spin_lock(&wq_spin_lock);
@@ -144,7 +139,7 @@ void wq_wake_one(struct wait_queue *wq)
 	thread_unmask_exceptions(old_itr_status);
 
 	if (do_wakeup)
-		wq_rpc(TEE_RPC_WAIT_QUEUE_WAKEUP, handle);
+		wq_rpc(OPTEE_MSG_RPC_WAIT_QUEUE_WAKEUP, handle);
 }
 
 void wq_promote_condvar(struct wait_queue *wq, struct condvar *cv,
