@@ -36,8 +36,6 @@
 #include <tee/abi.h>
 #include <mm/tee_mmu.h>
 #include <mm/tee_mm.h>
-#include <kernel/tee_rpc.h>
-#include <kernel/tee_rpc_types.h>
 #include <kernel/tee_time.h>
 
 #include <user_ta_header.h>
