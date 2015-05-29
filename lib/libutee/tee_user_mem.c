@@ -336,7 +336,7 @@ void *tee_user_mem_alloc(size_t len, uint32_t hint)
 		    (((uintptr_t) cp) & 0xFF) ^ 0xC5;
 #endif
 
-		PB(TRACE_DEBUG, "Allocate: ", (void *)e);
+		//PB(TRACE_DEBUG, "Allocate: ", (void *)e);
 
 		buf = buf_addr(e);
 
@@ -435,7 +435,7 @@ void tee_user_mem_free(void *buffer)
 	cp = elem_addr(buffer);
 	e = (struct user_mem_elem *)(void *)cp;
 
-	PB(TRACE_DEBUG, "Free: ", (void *)e);
+	//PB(TRACE_DEBUG, "Free: ", (void *)e);
 
 #if (CFG_TEE_CORE_USER_MEM_DEBUG == 1)
 	assert(check_elem(e));
