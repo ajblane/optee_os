@@ -55,7 +55,7 @@ before_script:
   - export PATH=$HOME/bin:$PATH
   - mkdir $HOME/optee_repo
   - (cd $HOME/optee_repo && repo init -u https://github.com/OP-TEE/manifest.git </dev/null && repo forall -c 'if [ "$REPO_PROJECT" != "linux" ]; then repo sync --no-clone-bundle --no-tags --quiet $REPO_PROJECT; fi' && wget https://www.kernel.org/pub/linux/kernel/v4.x/linux-4.1.1.tar.gz && tar zxf linux-4.1.1.tar.gz && mv linux-4.1.1 linux)
-  - (cd $HOME/optee_repo && sed -i -e 's/"xtest"/"xtest 4002"/' -e 's/spawn \.\./spawn strace "-ostrace.log" ../' build/qemu-check.exp
+  - (cd $HOME/optee_repo && sed -i -e 's/"xtest"/"xtest 4002"/' -e 's/spawn \.\./spawn strace "-ostrace.log" ../' build/qemu-check.exp)
   - (cd $HOME/optee_repo/qemu && git submodule update --init dtc)
   - (cd $HOME/optee_repo && mv optee_os optee_os_old && ln -s $MYHOME optee_os)
   - cd $MYHOME
