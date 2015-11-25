@@ -61,7 +61,7 @@ before_script:
   - (cd $HOME/optee_repo && repo init -u https://github.com/OP-TEE/manifest.git </dev/null && repo sync --no-clone-bundle --no-tags --quiet)
   # Temporary patches
   - (cd $HOME/optee_repo && sed -i -e 's/"xtest"/"xtest 4002"/' -e 's/spawn \.\./spawn strace "-ostrace.log" ../' build/qemu-check.exp)
-  - (cd $HOME/optee_repo && echo "# CONFIG_JFFS2_FS is not set" >>linux/kconfig_preempt.conf)
+  - (cd $HOME/optee_repo && echo "# CONFIG_JFFS2_FS is not set" >>build/kconfig_preempt.conf)
   # End of temporary patches
   - (cd $HOME/optee_repo/qemu && git submodule update --init dtc)
   - (cd $HOME/optee_repo && mv optee_os optee_os_old && ln -s $MYHOME optee_os)
