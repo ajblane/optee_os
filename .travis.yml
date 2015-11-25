@@ -68,14 +68,4 @@ before_script:
 # Several compilation options are checked
 script:
   # Run regression tests (xtest in QEMU)
-  - (cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE="ccache arm-linux-gnueabihf-" DUMP_LOGS_ON_ERROR=1 || (cat strace.log; false))
-  - (cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE="ccache arm-linux-gnueabihf-" DUMP_LOGS_ON_ERROR=1 || (cat strace.log; false))
-  - (cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE="ccache arm-linux-gnueabihf-" DUMP_LOGS_ON_ERROR=1 || (cat strace.log; false))
-  - (cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE="ccache arm-linux-gnueabihf-" DUMP_LOGS_ON_ERROR=1 || (cat strace.log; false))
-  - (cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE="ccache arm-linux-gnueabihf-" DUMP_LOGS_ON_ERROR=1 || (cat strace.log; false))
-  - (cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE="ccache arm-linux-gnueabihf-" DUMP_LOGS_ON_ERROR=1 || (cat strace.log; false))
-  - (cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE="ccache arm-linux-gnueabihf-" DUMP_LOGS_ON_ERROR=1 || (cat strace.log; false))
-  - (cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE="ccache arm-linux-gnueabihf-" DUMP_LOGS_ON_ERROR=1 || (cat strace.log; false))
-  - (cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE="ccache arm-linux-gnueabihf-" DUMP_LOGS_ON_ERROR=1 || (cat strace.log; false))
-  - (cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE="ccache arm-linux-gnueabihf-" DUMP_LOGS_ON_ERROR=1 || (cat strace.log; false))
-  - (cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE="ccache arm-linux-gnueabihf-" DUMP_LOGS_ON_ERROR=1 || (cat strace.log; false))
+  - S=1; for i in $(seq 1 10); do { cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE="ccache arm-linux-gnueabihf-" DUMP_LOGS_ON_ERROR=1 || { echo "head -250 strace.log"; head -250 strace.log; echo "tail -250 strace.log"; tail -250 strace.log; S=""; break; } }; done; [ "$S" ];
