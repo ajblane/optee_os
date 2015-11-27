@@ -89,6 +89,7 @@ struct tee_fs_fd {
 	int pos;
 	uint32_t flags;
 	int fd;
+	int nw_fd; /* Normal world */
 	bool is_new_file;
 	char *filename;
 	struct block_cache block_cache;
