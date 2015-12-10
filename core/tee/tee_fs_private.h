@@ -89,7 +89,9 @@ struct tee_fs_fd {
 	int pos;
 	uint32_t flags;
 	int fd;
+#ifdef CFG_RPMB_FS
 	int nw_fd; /* Normal world */
+#endif
 	bool is_new_file;
 	char *filename;
 	struct block_cache block_cache;
