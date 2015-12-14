@@ -553,6 +553,7 @@ func_exit:
 	return res;
 }
 
+#ifndef CFG_RPMB_FS_NO_MAC
 static TEE_Result tee_rpmb_data_cpy_mac_calc(struct rpmb_data_frame *datafrm,
 					     struct rpmb_raw_data *rawdata,
 					     uint16_t nbr_frms,
@@ -657,6 +658,7 @@ func_exit:
 	free(ctx);
 	return res;
 }
+#endif
 
 static TEE_Result tee_rpmb_resp_unpack_verify(struct rpmb_data_frame *datafrm,
 					      struct rpmb_raw_data *rawdata,
@@ -696,7 +698,8 @@ static TEE_Result tee_rpmb_resp_unpack_verify(struct rpmb_data_frame *datafrm,
 	/* Check the response msg_type. */
 	bytes_to_u16(lastfrm.msg_type, &msg_type);
 	if (msg_type != rawdata->msg_type) {
-		DMSG("Unexpected msg_type");
+		DMSG("Unexpected msg_type (0x%04x != 0x%04x)", msg_type,
+		     rawdata->msg_type);
 		return TEE_ERROR_GENERIC;
 	}
 
@@ -714,7 +717,9 @@ static TEE_Result tee_rpmb_resp_unpack_verify(struct rpmb_data_frame *datafrm,
 		if (msg_type == RPMB_MSG_TYPE_RESP_AUTH_DATA_WRITE) {
 			/* Verify the write counter is incremented by 1 */
 			if (*rawdata->write_counter != wr_cnt + 1) {
-				DMSG("Write counter mismatched");
+				DMSG("Write counter mismatched "
+				     "(0x%04x != 0x%04x)",
+				     *rawdata->write_counter, wr_cnt + 1);
 				return TEE_ERROR_SECURITY;
 			}
 			rpmb_ctx->wr_cnt++;
@@ -729,6 +734,9 @@ static TEE_Result tee_rpmb_resp_unpack_verify(struct rpmb_data_frame *datafrm,
 		}
 	}
 
+#ifdef CFG_RPMB_FS_NO_MAC
+	(void)res;
+#else
 	if (rawdata->key_mac) {
 		if (msg_type == RPMB_MSG_TYPE_RESP_AUTH_DATA_READ) {
 			if (rawdata->data == NULL)
@@ -768,6 +776,7 @@ static TEE_Result tee_rpmb_resp_unpack_verify(struct rpmb_data_frame *datafrm,
 			return TEE_ERROR_SECURITY;
 		}
 	}
+#endif /* !CFG_RPMB_FS_NO_MAC */
 
 	return TEE_SUCCESS;
 }
