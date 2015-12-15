@@ -539,11 +539,11 @@ static TEE_Result tee_rpmb_req_pack(struct rpmb_req *req,
 	memcpy(TEE_RPMB_REQ_DATA(req), datafrm,
 	       nbr_frms * RPMB_DATA_FRAME_SIZE);
 
-#ifdef ENABLE_RPMB_DATA_DUMP
+#ifdef CFG_RPMB_FS_DEBUG_DATA
 	for (i = 0; i < nbr_frms; i++) {
 		DMSG("Dumping datafrm[%d]:", i);
-		HEX_PRINT_BUF((uint8_t *)&datafrm[i] + RPMB_STUFF_DATA_SIZE,
-			      512 - RPMB_STUFF_DATA_SIZE);
+		DHEXDUMP((uint8_t *)&datafrm[i] + RPMB_STUFF_DATA_SIZE,
+			 512 - RPMB_STUFF_DATA_SIZE);
 	}
 #endif
 
@@ -674,12 +674,11 @@ static TEE_Result tee_rpmb_resp_unpack_verify(struct rpmb_data_frame *datafrm,
 	if (datafrm == NULL || rawdata == NULL || nbr_frms == 0)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-#ifdef ENABLE_RPMB_DATA_DUMP
-	uint32_t i = 0;
-	for (i = 0; i < nbr_frms; i++) {
+#ifdef CFG_RPMB_FS_DEBUG_DATA
+	for (uint32_t i = 0; i < nbr_frms; i++) {
 		DMSG("Dumping datafrm[%d]:", i);
-		HEX_PRINT_BUF((uint8_t *)&datafrm[i] + RPMB_STUFF_DATA_SIZE,
-			      512 - RPMB_STUFF_DATA_SIZE);
+		DHEXDUMP((uint8_t *)&datafrm[i] + RPMB_STUFF_DATA_SIZE,
+			 512 - RPMB_STUFF_DATA_SIZE);
 	}
 #endif
 
@@ -770,8 +769,8 @@ static TEE_Result tee_rpmb_resp_unpack_verify(struct rpmb_data_frame *datafrm,
 				   (datafrm + nbr_frms - 1)->key_mac,
 				   RPMB_KEY_MAC_SIZE) != 0) {
 			DMSG("MAC mismatched:");
-#ifdef ENABLE_RPMB_DATA_DUMP
-			HEX_PRINT_BUF((uint8_t *)rawdata->key_mac, 32);
+#ifdef CFG_RPMB_FS_DEBUG_DATA
+			DHEXDUMP((uint8_t *)rawdata->key_mac, 32);
 #endif
 			return TEE_ERROR_SECURITY;
 		}
@@ -826,9 +825,9 @@ static TEE_Result tee_rpmb_get_dev_info(uint16_t dev_id,
 
 	memcpy((uint8_t *)dev_info, resp, sizeof(struct rpmb_dev_info));
 
-#ifdef ENABLE_RPMB_DATA_DUMP
+#ifdef CFG_RPMB_FS_DEBUG_DATA
 	DMSG("Dumping DEV INFO:");
-	HEX_PRINT_BUF((uint8_t *)dev_info, sizeof(struct rpmb_dev_info));
+	DHEXDUMP((uint8_t *)dev_info, sizeof(struct rpmb_dev_info));
 #endif
 
 	res = TEE_SUCCESS;
