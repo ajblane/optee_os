@@ -42,8 +42,8 @@
 
 #define DEV_ID                          0
 #define RPMB_FS_MAGIC                   0x52504D42
-#define FS_VERSION                      1
-#define N_ENTRIES                       16
+#define FS_VERSION                      2 /* 1 */
+#define N_ENTRIES                       8 /* 16 */
 
 #define FILE_IS_ACTIVE                  (1u << 0)
 #define FILE_IS_LAST_ENTRY              (1u << 1)
@@ -862,10 +862,12 @@ int tee_rpmb_fs_mkdir(const char *path, tee_fs_mode_t mode)
 	(void)path;
 	(void)mode;
 
-	/* mkdir is not supported in RPMB and should not be called*/
-	EMSG("tee_rpmb_fs_mkdir called when not expected");
-
-	return -1;
+	/*
+	 * FIXME: mkdir() should really create some entry in the FAT so that
+	 * access() would return success when the directory exists but is
+	 * empty.
+	 */
+	return 0;
 }
 
 int tee_rpmb_fs_ftruncate(int fd, tee_fs_off_t length)
