@@ -236,7 +236,16 @@ int tee_fs_common_write(TEE_Result *errno, struct tee_fs_fd *fdp,
 
 	if (!fdp) {
 		*errno = TEE_ERROR_BAD_PARAMETERS;
-		res = -1;
+		goto exit;
+	}
+
+	if (!len) {
+		res = 0;
+		goto exit;
+	}
+
+	if (!buf) {
+		*errno = TEE_ERROR_BAD_PARAMETERS;
 		goto exit;
 	}
 
