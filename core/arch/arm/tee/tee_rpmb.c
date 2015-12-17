@@ -199,7 +199,7 @@ static TEE_Result tee_rpmb_key_gen(uint16_t dev_id __unused,
 		goto out;
 	}
 
-	IMSG("RPMB: Using test key\n");
+	IMSG("RPMB: Using test key");
 	memcpy(key, rpmb_test_key, RPMB_KEY_MAC_SIZE);
 
 out:
@@ -246,7 +246,7 @@ static TEE_Result tee_rpmb_key_gen(uint16_t dev_id __unused,
 		goto out;
 	}
 
-	IMSG("RPMB: Using generated key\n");
+	IMSG("RPMB: Using generated key");
 	if (commercial) {
 		res = tee_get_hw_unique_key(&hwkey);
 		if (res != TEE_SUCCESS)
@@ -807,12 +807,6 @@ static TEE_Result tee_rpmb_get_dev_info(uint16_t dev_id,
 	    RPMB_CMD_GET_DEV_INFO_RET_ERROR;
 
 	res = tee_rpmb_invoke(&mem);
-	IMSG("RPMB GETDEVINFO: invoke returned (0x%x), %d %d %d\n",
-	     res,
-	     ((struct rpmb_dev_info *)resp)->rpmb_size_mult,
-	     ((struct rpmb_dev_info *)resp)->rel_wr_sec_c,
-	     ((struct rpmb_dev_info *)resp)->ret_code);
-
 	if (res != TEE_SUCCESS)
 		goto func_exit;
 
@@ -826,7 +820,7 @@ static TEE_Result tee_rpmb_get_dev_info(uint16_t dev_id,
 	memcpy((uint8_t *)dev_info, resp, sizeof(struct rpmb_dev_info));
 
 #ifdef CFG_RPMB_FS_DEBUG_DATA
-	DMSG("Dumping DEV INFO:");
+	DMSG("Dumping dev_info:");
 	DHEXDUMP((uint8_t *)dev_info, sizeof(struct rpmb_dev_info));
 #endif
 
@@ -938,18 +932,17 @@ static TEE_Result tee_rpmb_init(uint16_t dev_id, bool writekey, bool commercial)
 	rpmb_ctx->dev_id = dev_id;
 
 	if (!rpmb_ctx->dev_info_synced) {
-		IMSG("RPMB INIT: Syncing Dev Info\n");
+		IMSG("RPMB: Syncing device information");
 
 		dev_info.rpmb_size_mult = 0;
 		dev_info.rel_wr_sec_c = 0;
 		res = tee_rpmb_get_dev_info(dev_id, &dev_info);
-		IMSG("RPMB INIT: GetDevInfo returned (0x%x), %d %d\n",
-		     res,
-		     dev_info.rpmb_size_mult,
-		     dev_info.rel_wr_sec_c);
-
 		if (res != TEE_SUCCESS)
 			goto func_exit;
+
+		IMSG("RPMB: RPMB size is %d*128 KB", dev_info.rpmb_size_mult);
+		IMSG("RPMB: Reliable Write Sector Count is %d",
+		     dev_info.rel_wr_sec_c);
 
 		if (dev_info.rpmb_size_mult == 0) {
 			res = TEE_ERROR_GENERIC;
@@ -980,7 +973,7 @@ static TEE_Result tee_rpmb_init(uint16_t dev_id, bool writekey, bool commercial)
 	}
 
 	if (!rpmb_ctx->key_derived) {
-		IMSG("RPMB INIT: Deriving Key\n");
+		IMSG("RPMB INIT: Deriving key");
 
 		res = tee_rpmb_key_gen(dev_id, rpmb_ctx->key,
 				       RPMB_KEY_MAC_SIZE, commercial);
