@@ -553,7 +553,6 @@ func_exit:
 	return res;
 }
 
-#ifndef CFG_RPMB_FS_NO_MAC
 static TEE_Result tee_rpmb_data_cpy_mac_calc(struct rpmb_data_frame *datafrm,
 					     struct rpmb_raw_data *rawdata,
 					     uint16_t nbr_frms,
@@ -658,7 +657,6 @@ func_exit:
 	free(ctx);
 	return res;
 }
-#endif
 
 static TEE_Result tee_rpmb_resp_unpack_verify(struct rpmb_data_frame *datafrm,
 					      struct rpmb_raw_data *rawdata,
@@ -733,9 +731,6 @@ static TEE_Result tee_rpmb_resp_unpack_verify(struct rpmb_data_frame *datafrm,
 		}
 	}
 
-#ifdef CFG_RPMB_FS_NO_MAC
-	(void)res;
-#else
 	if (rawdata->key_mac) {
 		if (msg_type == RPMB_MSG_TYPE_RESP_AUTH_DATA_READ) {
 			if (rawdata->data == NULL)
@@ -765,6 +760,7 @@ static TEE_Result tee_rpmb_resp_unpack_verify(struct rpmb_data_frame *datafrm,
 				return res;
 		}
 
+#ifndef CFG_RPMB_FS_NO_MAC
 		if (buf_compare_ct(rawdata->key_mac,
 				   (datafrm + nbr_frms - 1)->key_mac,
 				   RPMB_KEY_MAC_SIZE) != 0) {
@@ -774,8 +770,8 @@ static TEE_Result tee_rpmb_resp_unpack_verify(struct rpmb_data_frame *datafrm,
 #endif
 			return TEE_ERROR_SECURITY;
 		}
-	}
 #endif /* !CFG_RPMB_FS_NO_MAC */
+	}
 
 	return TEE_SUCCESS;
 }
@@ -1084,7 +1080,6 @@ TEE_Result tee_rpmb_read(uint16_t dev_id,
 
 	blkcnt =
 	    ROUNDUP(len + byte_offset, RPMB_DATA_SIZE) / RPMB_DATA_SIZE;
-
 	res = tee_rpmb_init(dev_id, false, true);
 	if (res != TEE_SUCCESS)
 		goto func_exit;
@@ -1111,6 +1106,9 @@ TEE_Result tee_rpmb_read(uint16_t dev_id,
 		goto func_exit;
 
 	req->block_count = blkcnt;
+
+	DMSG("BLOCK READ %u block%s at index %u", blkcnt,
+	     ((blkcnt > 1) ? "s": ""), blk_idx);
 
 	res = tee_rpmb_invoke(&mem);
 	if (res != TEE_SUCCESS)
@@ -1218,6 +1216,9 @@ static TEE_Result tee_rpmb_write_blk(uint16_t dev_id,
 		res = tee_rpmb_req_pack(req, &rawdata, tmp_blkcnt, dev_id);
 		if (res != TEE_SUCCESS)
 			goto func_exit;
+
+		DMSG("BLOCK WRITE %u block%s at index %u", tmp_blkcnt,
+		     ((tmp_blkcnt > 1) ? "s": ""), tmp_blk_idx);
 
 		res = tee_rpmb_invoke(&mem);
 		if (res != TEE_SUCCESS) {

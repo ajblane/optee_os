@@ -149,7 +149,7 @@ static void dump_fat(void)
 
 		for (i = 0; i < N_ENTRIES; i++) {
 
-			FMSG("Flags 0x%x, Size %d, Address 0x%x, Filename %s\n",
+			FMSG("flags 0x%x, size %d, address 0x%x, filename '%s'",
 				fat_entries[i].flags,
 				fat_entries[i].data_size,
 				fat_entries[i].start_address,
@@ -258,7 +258,6 @@ static TEE_Result rpmb_fs_setup(void)
 	res = tee_rpmb_read(DEV_ID, RPMB_STORAGE_START_ADDRESS,
 			    (uint8_t *)partition_data,
 			    sizeof(struct rpmb_fs_partition));
-
 	if (res != TEE_SUCCESS)
 		goto out;
 
