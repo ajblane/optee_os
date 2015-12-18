@@ -1301,7 +1301,9 @@ TEE_Result tee_rpmb_write(uint16_t dev_id,
 			goto func_exit;
 
 		/* Partial update of the data blocks */
+		tee_rpmb_reset_session(sess);
 		memcpy(data_tmp + byte_offset, data, len);
+		tee_rpmb_clear_session(&sess);
 
 		res = tee_rpmb_write_blk(dev_id, blk_idx, data_tmp, blkcnt);
 		if (res != TEE_SUCCESS)
