@@ -80,6 +80,8 @@ struct rpmb_file_handle {
 	char filename[TEE_RPMB_FS_FILENAME_LENGTH];
 	/* Adress for current entry in RPMB */
 	uint32_t rpmb_fat_address;
+	/* Current position (lseek) */
+	tee_fs_off_t pos;
 };
 
 /**
@@ -623,7 +625,7 @@ int tee_rpmb_fs_close(int fd)
 	struct rpmb_file_handle *fh;
 
 	fh = handle_put(&fs_handle_db, fd);
-	if (fh != NULL) {
+	if (fh) {
 		free(fh);
 		return 0;
 	}
@@ -634,7 +636,7 @@ int tee_rpmb_fs_close(int fd)
 int tee_rpmb_fs_read(int fd, uint8_t *buf, size_t size)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
-	struct rpmb_file_handle *fh = NULL;
+	struct rpmb_file_handle *fh;
 	int read_size = -1;
 
 	if (buf == NULL) {
@@ -683,7 +685,7 @@ out:
 int tee_rpmb_fs_write(int fd, uint8_t *buf, size_t size)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
-	struct rpmb_file_handle *fh = NULL;
+	struct rpmb_file_handle *fh;
 	tee_mm_pool_t p;
 	bool pool_result = false;
 	tee_mm_entry_t *mm = NULL;
@@ -755,16 +757,50 @@ out:
 
 tee_fs_off_t tee_rpmb_fs_lseek(int fd, tee_fs_off_t offset, int whence)
 {
-	(void)fd;
+	struct rpmb_file_handle *fh;
+	TEE_Result res;
+	tee_fs_off_t ret = -1;
+	tee_fs_off_t new_pos;
+	size_t filelen;
 
-	/*
-	 * Currently, RPMB only returns success for seek to 0 since the
-	 * entire file must be read at once.
-	 */
-	if (whence != TEE_FS_SEEK_SET || offset != 0)
+	fh = handle_lookup(&fs_handle_db, fd);
+	if (!fh)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	res = read_fat(fh, NULL);
+	if (res != TEE_SUCCESS)
 		return -1;
 
-	return 0;
+	filelen = fh->fat_entry.data_size;
+
+	switch (whence) {
+	case TEE_FS_SEEK_SET:
+		new_pos = offset;
+		break;
+
+	case TEE_FS_SEEK_CUR:
+		new_pos = fh->pos + offset;
+		break;
+
+	case TEE_FS_SEEK_END:
+		new_pos = filelen + offset;
+		break;
+
+	default:
+		goto exit;
+	}
+
+	if (new_pos < 0)
+		new_pos = 0;
+
+	if (new_pos > TEE_DATA_MAX_POSITION) {
+		EMSG("Position is beyond TEE_DATA_MAX_POSITION");
+		goto exit;
+	}
+
+	ret = fh->pos = new_pos;
+exit:
+	return ret;
 }
 
 TEE_Result tee_rpmb_fs_rm(const char *filename)

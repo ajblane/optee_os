@@ -142,26 +142,6 @@ int tee_fs_common_close(struct tee_fs_fd *fdp)
 }
 
 
-tee_fs_off_t tee_fs_common_lseek(TEE_Result *errno, struct tee_fs_fd *fdp,
-				tee_fs_off_t offset, int whence)
-{
-	tee_fs_off_t res = -1;
-
-	assert(errno != NULL);
-	*errno = TEE_SUCCESS;
-
-	if (!fdp) {
-		*errno = TEE_ERROR_BAD_PARAMETERS;
-		goto exit;
-	}
-
-	res = tee_rpmb_fs_lseek(fdp->nw_fd, offset, whence);
-	if (res < 0)
-		*errno = TEE_ERROR_BAD_PARAMETERS;
-exit:
-	return res;
-}
-
 static TEE_Result _to_errno(int rc)
 {
 	if (rc == -1)
@@ -178,6 +158,37 @@ static int _filter_rc(int rc)
 		return -1;
 	else
 		return rc;
+}
+
+
+tee_fs_off_t tee_fs_common_lseek(TEE_Result *errno, struct tee_fs_fd *fdp,
+				tee_fs_off_t offset, int whence)
+{
+	int rc;
+	int res = -1;
+
+	assert(errno != NULL);
+	*errno = TEE_SUCCESS;
+
+	if (!fdp) {
+		*errno = TEE_ERROR_BAD_PARAMETERS;
+		res = -1;
+		goto exit;
+	}
+
+	rc = tee_rpmb_fs_lseek(fdp->nw_fd, offset, whence);
+	if (rc == -1) {
+		*errno = TEE_ERROR_GENERIC;
+		res = -1;
+	} else if (rc < 0) {
+		*errno = (TEE_Result)rc;
+		res = -1;
+	} else {
+		res = rc;
+	}
+
+exit:
+	return res;
 }
 
 int tee_fs_common_ftruncate(TEE_Result *errno, struct tee_fs_fd *fdp,

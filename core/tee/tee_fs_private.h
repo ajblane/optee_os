@@ -85,7 +85,9 @@ struct block_cache {
 };
 
 struct tee_fs_fd {
+#ifndef CFG_RPMB_FS
 	struct tee_fs_file_meta *meta;
+#endif
 	int pos;
 	uint32_t flags;
 	int fd;
