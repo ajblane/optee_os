@@ -35,6 +35,7 @@
 #include <trace.h>
 #include <stdlib.h>
 #include <string.h>
+#include <util.h>
 
 #define RPMB_STORAGE_START_ADDRESS      0
 #define RPMB_FS_FAT_START_ADDRESS       512
@@ -80,8 +81,8 @@ struct rpmb_file_handle {
 	char filename[TEE_RPMB_FS_FILENAME_LENGTH];
 	/* Adress for current entry in RPMB */
 	uint32_t rpmb_fat_address;
-	/* Current position (lseek) */
-	tee_fs_off_t pos;
+	/* Current position */
+	uint32_t pos;
 };
 
 /**
@@ -639,6 +640,9 @@ int tee_rpmb_fs_read(int fd, uint8_t *buf, size_t size)
 	struct rpmb_file_handle *fh;
 	int read_size = -1;
 
+	if (!size)
+		return 0;
+
 	if (buf == NULL) {
 		res = TEE_ERROR_BAD_PARAMETERS;
 		goto out;
@@ -650,29 +654,20 @@ int tee_rpmb_fs_read(int fd, uint8_t *buf, size_t size)
 		goto out;
 	}
 
-	/*
-	 * Need to update the contents because the file could have already been
-	 * written to by someone else
-	 */
-
 	res = read_fat(fh, NULL);
 	if (res != TEE_SUCCESS)
 		goto out;
 
-	if (size < fh->fat_entry.data_size) {
-		res = TEE_ERROR_SHORT_BUFFER;
-		goto out;
-	}
-
-	if (fh->fat_entry.data_size > 0) {
-		res = tee_rpmb_read(DEV_ID, fh->fat_entry.start_address, buf,
-				    fh->fat_entry.data_size);
-
+	size = MIN(size, fh->fat_entry.data_size - fh->pos);
+	if (size > 0) {
+		res = tee_rpmb_read(DEV_ID,
+				    fh->fat_entry.start_address + fh->pos, buf,
+				    size);
 		if (res != TEE_SUCCESS)
 			goto out;
 	}
 
-	read_size = fh->fat_entry.data_size;
+	read_size = size;
 	res = TEE_SUCCESS;
 
 out:
@@ -689,6 +684,12 @@ int tee_rpmb_fs_write(int fd, uint8_t *buf, size_t size)
 	tee_mm_pool_t p;
 	bool pool_result = false;
 	tee_mm_entry_t *mm = NULL;
+	size_t newsize;
+	uint8_t *newbuf;
+	uintptr_t newaddr;
+
+	if (!size)
+		return 0;
 
 	if (buf == NULL) {
 		res = TEE_ERROR_BAD_PARAMETERS;
@@ -712,7 +713,6 @@ int tee_rpmb_fs_write(int fd, uint8_t *buf, size_t size)
 				  fs_par->max_rpmb_address,
 				  RPMB_BLOCK_SIZE_SHIFT,
 				  TEE_MM_POOL_HI_ALLOC);
-
 	if (!pool_result) {
 		res = TEE_ERROR_OUT_OF_MEMORY;
 		goto out;
@@ -722,12 +722,6 @@ int tee_rpmb_fs_write(int fd, uint8_t *buf, size_t size)
 	if (res != TEE_SUCCESS)
 		goto out;
 
-	mm = tee_mm_alloc(&p, size);
-	if (mm == NULL) {
-		res = TEE_ERROR_OUT_OF_MEMORY;
-		goto out;
-	}
-
 	if ((fh->fat_entry.flags & FILE_IS_LAST_ENTRY) != 0) {
 		TEE_ASSERT(0);
 		res = add_fat_entry(fh);
@@ -735,16 +729,48 @@ int tee_rpmb_fs_write(int fd, uint8_t *buf, size_t size)
 			goto out;
 	}
 
-	fh->fat_entry.data_size = size;
-	fh->fat_entry.flags = FILE_IS_ACTIVE;
-	fh->fat_entry.start_address = tee_mm_get_smem(mm);
+	newsize = fh->pos + size;
+	if (newsize <= fh->fat_entry.data_size) {
+		/* Modifying file content */
 
-	res = tee_rpmb_write(DEV_ID, fh->fat_entry.start_address, buf, size);
-	if (res != TEE_SUCCESS)
-		goto out;
+		res = tee_rpmb_write(DEV_ID,
+				     fh->fat_entry.start_address + fh->pos,
+				     buf, size);
+		if (res != TEE_SUCCESS)
+			goto out;
+	} else {
+		/* Extend file: allocate, read, update, write */
 
-	res = write_fat_entry(fh, true);
+		mm = tee_mm_alloc(&p, newsize);
+		newbuf = calloc(newsize, 1);
+		if (!mm || !newbuf) {
+			res = TEE_ERROR_OUT_OF_MEMORY;
+			goto out;
+		}
 
+		if (fh->fat_entry.data_size) {
+			res = tee_rpmb_read(DEV_ID,
+					    fh->fat_entry.start_address,
+					    newbuf, fh->fat_entry.data_size);
+			if (res != TEE_SUCCESS)
+				goto out;
+		}
+
+		memcpy(newbuf + fh->pos, buf, size);
+
+		newaddr = tee_mm_get_smem(mm);
+		res = tee_rpmb_write(DEV_ID, newaddr, newbuf, newsize);
+		if (res != TEE_SUCCESS)
+			goto out;
+
+		fh->fat_entry.data_size = newsize;
+		fh->fat_entry.start_address = newaddr;
+		res = write_fat_entry(fh, true);
+		if (res != TEE_SUCCESS)
+			goto out;
+	}
+
+	fh->pos = newsize;
 out:
 	if (pool_result)
 		tee_mm_final(&p);
@@ -761,7 +787,6 @@ tee_fs_off_t tee_rpmb_fs_lseek(int fd, tee_fs_off_t offset, int whence)
 	TEE_Result res;
 	tee_fs_off_t ret = -1;
 	tee_fs_off_t new_pos;
-	size_t filelen;
 
 	fh = handle_lookup(&fs_handle_db, fd);
 	if (!fh)
@@ -770,8 +795,6 @@ tee_fs_off_t tee_rpmb_fs_lseek(int fd, tee_fs_off_t offset, int whence)
 	res = read_fat(fh, NULL);
 	if (res != TEE_SUCCESS)
 		return -1;
-
-	filelen = fh->fat_entry.data_size;
 
 	switch (whence) {
 	case TEE_FS_SEEK_SET:
@@ -783,7 +806,7 @@ tee_fs_off_t tee_rpmb_fs_lseek(int fd, tee_fs_off_t offset, int whence)
 		break;
 
 	case TEE_FS_SEEK_END:
-		new_pos = filelen + offset;
+		new_pos = fh->fat_entry.data_size + offset;
 		break;
 
 	default:
@@ -922,16 +945,10 @@ int tee_rpmb_fs_ftruncate(int fd, tee_fs_off_t length)
 		goto out;
 	}
 
-	/*
-	 * Need to update the contents because the file could have already been
-	 * written to by someone else
-	 */
-
 	res = read_fat(fh, NULL);
 	if (res != TEE_SUCCESS)
 		goto out;
 
-	/* Clear the size and the address */
 	fh->fat_entry.data_size = 0;
 	fh->fat_entry.start_address = 0;
 	res = write_fat_entry(fh, false);
