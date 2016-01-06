@@ -80,14 +80,22 @@ int tee_fs_common_open(TEE_Result *errno, const char *file, int flags, ...)
 	 */
 	res = tee_rpmb_fs_open(file, flags & (~TEE_FS_O_CREATE));
 	if (res < 0) {
-		if (!(flags & TEE_FS_O_CREATE))
+		if (!(flags & TEE_FS_O_CREATE)) {
+			*errno = TEE_ERROR_ITEM_NOT_FOUND;
 			goto exit;
+		}
 
 		res = tee_rpmb_fs_open(file, flags);
 		if (res < 0)
 			goto exit;
 
 		is_new_file = true;
+	} else {
+		/* File already exists */
+		if ((flags & TEE_FS_O_CREATE) && (flags & TEE_FS_O_EXCL)) {
+			*errno = TEE_ERROR_ACCESS_CONFLICT;
+			goto exit;
+		}
 	}
 
 	fd = res;
