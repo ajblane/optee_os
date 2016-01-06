@@ -1161,6 +1161,9 @@ static TEE_Result tee_rpmb_write_blk(uint16_t dev_id,
 	uint16_t tmp_blk_idx;
 	uint16_t i;
 
+	DMSG("BLOCK WRITE %u block%s at index %u", blkcnt,
+	     ((tmp_blkcnt > 1) ? "s": ""), blk_idx);
+
 	if (data_blks == NULL || blkcnt == 0)
 		return TEE_ERROR_BAD_PARAMETERS;
 
@@ -1180,10 +1183,6 @@ static TEE_Result tee_rpmb_write_blk(uint16_t dev_id,
 		    RPMB_DATA_FRAME_SIZE * rpmb_ctx->rel_wr_blkcnt;
 
 	resp_size = RPMB_DATA_FRAME_SIZE;
-	res = tee_rpmb_alloc(req_size, resp_size, &mem,
-			     (void *)&req, (void *)&resp);
-	if (res != TEE_SUCCESS)
-		goto func_exit;
 
 	nbr_writes = blkcnt / rpmb_ctx->rel_wr_blkcnt;
 	if (blkcnt % rpmb_ctx->rel_wr_blkcnt > 0)
@@ -1192,6 +1191,18 @@ static TEE_Result tee_rpmb_write_blk(uint16_t dev_id,
 	tmp_blkcnt = rpmb_ctx->rel_wr_blkcnt;
 	tmp_blk_idx = blk_idx;
 	for (i = 0; i < nbr_writes; i++) {
+		/*
+		 * FIXME:
+		 * Re-using mem for several requests causes a kernel crash
+		 *
+		 *  misc opteearmtz00: Can't find shm for 000000003ef0a000
+		 *  kernel BUG at ../optee_linuxdriver/core/tee_supp_com.c:221!
+		 */
+		res = tee_rpmb_alloc(req_size, resp_size, &mem,
+				     (void *)&req, (void *)&resp);
+		if (res != TEE_SUCCESS)
+			goto func_exit;
+
 		/*
 		 * To handle the last write of block count which is
 		 * equal or smaller than reliable write block count.
@@ -1217,9 +1228,9 @@ static TEE_Result tee_rpmb_write_blk(uint16_t dev_id,
 
 		res = tee_rpmb_req_pack(req, &rawdata, tmp_blkcnt, dev_id);
 		if (res != TEE_SUCCESS)
-			goto func_exit;
+			goto free_and_exit;
 
-		DMSG("BLOCK WRITE %u block%s at index %u", tmp_blkcnt,
+		DMSG("write %u block%s at index %u", tmp_blkcnt,
 		     ((tmp_blkcnt > 1) ? "s": ""), tmp_blk_idx);
 
 		res = tee_rpmb_invoke(&mem);
@@ -1229,7 +1240,7 @@ static TEE_Result tee_rpmb_write_blk(uint16_t dev_id,
 			 * out of sync due to inconsistent operation result!
 			 */
 			rpmb_ctx->wr_cnt_synced = false;
-			goto func_exit;
+			goto free_and_exit;
 		}
 
 		msg_type = RPMB_MSG_TYPE_RESP_AUTH_DATA_WRITE;
@@ -1248,16 +1259,19 @@ static TEE_Result tee_rpmb_write_blk(uint16_t dev_id,
 			 * out of sync due to inconsistent operation result!
 			 */
 			rpmb_ctx->wr_cnt_synced = false;
-			goto func_exit;
+			goto free_and_exit;
 		}
 
 		tmp_blk_idx += tmp_blkcnt;
+		tee_rpmb_free(&mem);
 	}
 
 	res = TEE_SUCCESS;
+	goto func_exit;
 
-func_exit:
+free_and_exit:
 	tee_rpmb_free(&mem);
+func_exit:
 	return res;
 }
 
