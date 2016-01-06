@@ -1127,7 +1127,9 @@ TEE_Result tee_rpmb_read(uint16_t dev_id,
 	rawdata.len = len;
 	rawdata.byte_offset = byte_offset;
 
+	tee_rpmb_reset_session(sess);
 	res = tee_rpmb_resp_unpack_verify(resp, &rawdata, blkcnt);
+	tee_rpmb_clear_session(&sess);
 	if (res != TEE_SUCCESS)
 		goto func_exit;
 
