@@ -172,6 +172,21 @@ out:
 	free(fat_entries);
 }
 
+#if (TRACE_LEVEL >= TRACE_DEBUG)
+static void dump_fh(struct rpmb_file_handle *fh)
+{
+	DMSG("fh->filename=%s", fh->filename);
+	DMSG("fh->pos=%u", fh->pos);
+	DMSG("fh->rpmb_fat_address=%u", fh->rpmb_fat_address);
+	DMSG("fh->fat_entry.start_address=%u", fh->fat_entry.start_address);
+	DMSG("fh->fat_entry.data_size=%u", fh->fat_entry.data_size);
+}
+#else
+static void dump_fh(struct rpmb_file_handle *fh __unused)
+{
+}
+#endif
+
 static struct rpmb_file_handle *alloc_file_handle(const char *filename)
 {
 	struct rpmb_file_handle *fh = NULL;
@@ -529,6 +544,8 @@ int tee_rpmb_fs_open(const char *file, int flags, ...)
 	bool pool_result;
 	TEE_Result res = TEE_ERROR_GENERIC;
 
+	DMSG("file=%s flags=%x", file, flags);
+
 	if (file == NULL) {
 		res = TEE_ERROR_BAD_PARAMETERS;
 		goto out;
@@ -551,7 +568,7 @@ int tee_rpmb_fs_open(const char *file, int flags, ...)
 		goto out;
 	}
 
-    /* We need to do setup in order to make sure fs_par is filled in */
+	/* We need to do setup in order to make sure fs_par is filled in */
 	res = rpmb_fs_setup();
 	if (res != TEE_SUCCESS)
 		goto out;
@@ -618,12 +635,15 @@ out:
 		fd = -1;
 	}
 
+	DMSG("fd=%d", fd);
 	return fd;
 }
 
 int tee_rpmb_fs_close(int fd)
 {
 	struct rpmb_file_handle *fh;
+
+	DMSG("fd=%d", fd);
 
 	fh = handle_put(&fs_handle_db, fd);
 	if (fh) {
@@ -640,6 +660,8 @@ int tee_rpmb_fs_read(int fd, uint8_t *buf, size_t size)
 	struct rpmb_file_handle *fh;
 	int read_size = -1;
 
+	DMSG("fd=%d buf=%p size=%zu", fd, buf, size);
+
 	if (!size)
 		return 0;
 
@@ -653,6 +675,7 @@ int tee_rpmb_fs_read(int fd, uint8_t *buf, size_t size)
 		res = TEE_ERROR_BAD_PARAMETERS;
 		goto out;
 	}
+	dump_fh(fh);
 
 	res = read_fat(fh, NULL);
 	if (res != TEE_SUCCESS)
@@ -683,10 +706,12 @@ int tee_rpmb_fs_write(int fd, uint8_t *buf, size_t size)
 	struct rpmb_file_handle *fh;
 	tee_mm_pool_t p;
 	bool pool_result = false;
-	tee_mm_entry_t *mm = NULL;
+	tee_mm_entry_t *mm;
 	size_t newsize;
 	uint8_t *newbuf;
 	uintptr_t newaddr;
+
+	DMSG("fd=%d buf=%p size=%zu", fd, buf, size);
 
 	if (!size)
 		return 0;
@@ -706,6 +731,7 @@ int tee_rpmb_fs_write(int fd, uint8_t *buf, size_t size)
 		res = TEE_ERROR_BAD_PARAMETERS;
 		goto out;
 	}
+	dump_fh(fh);
 
 	/* Upper memory allocation must be used for RPMB_FS. */
 	pool_result = tee_mm_init(&p,
@@ -788,6 +814,8 @@ tee_fs_off_t tee_rpmb_fs_lseek(int fd, tee_fs_off_t offset, int whence)
 	tee_fs_off_t ret = -1;
 	tee_fs_off_t new_pos;
 
+	DMSG("fd=%d offset=%lld whence=%u", fd, offset, whence);
+
 	fh = handle_lookup(&fs_handle_db, fd);
 	if (!fh)
 		return TEE_ERROR_BAD_PARAMETERS;
@@ -823,6 +851,7 @@ tee_fs_off_t tee_rpmb_fs_lseek(int fd, tee_fs_off_t offset, int whence)
 
 	ret = fh->pos = new_pos;
 exit:
+	DMSG("ret=%lld", ret);
 	return ret;
 }
 
@@ -830,6 +859,8 @@ TEE_Result tee_rpmb_fs_rm(const char *filename)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
 	struct rpmb_file_handle *fh = NULL;
+
+	DMSG("filename=%s", filename);
 
 	if (filename == NULL ||
 		strlen(filename) >= TEE_RPMB_FS_FILENAME_LENGTH - 1) {
@@ -865,6 +896,8 @@ TEE_Result tee_rpmb_fs_rename(const char *old_name, const char *new_name)
 	struct rpmb_file_handle *fh_new = NULL;
 	uint32_t old_len;
 	uint32_t new_len;
+
+	DMSG("old_name=%s new_name=%s", old_name, new_name);
 
 	if (old_name == NULL || new_name == NULL) {
 		res = TEE_ERROR_BAD_PARAMETERS;
@@ -919,6 +952,8 @@ int tee_rpmb_fs_mkdir(const char *path, tee_fs_mode_t mode)
 {
 	(void)path;
 	(void)mode;
+
+	DMSG("path=%s mode=%x", path, mode);
 
 	/*
 	 * FIXME: mkdir() should really create some entry in the FAT so that
@@ -1234,6 +1269,7 @@ int tee_rpmb_fs_closedir(tee_fs_dir *dir)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
 
+	DMSG("dir=%p", (void *)dir);
 	if (dir == NULL) {
 		res = TEE_ERROR_BAD_PARAMETERS;
 		goto out;
