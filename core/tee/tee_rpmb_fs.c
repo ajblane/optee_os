@@ -931,13 +931,19 @@ int tee_rpmb_fs_mkdir(const char *path, tee_fs_mode_t mode)
 int tee_rpmb_fs_ftruncate(int fd, tee_fs_off_t length)
 {
 	struct rpmb_file_handle *fh;
-
+	tee_mm_pool_t p;
+	bool pool_result = false;
+	tee_mm_entry_t *mm;
+	uint32_t newsize;
+	uint8_t *newbuf;
+	uintptr_t newaddr;
 	TEE_Result res = TEE_ERROR_GENERIC;
 
-	if (length != 0) {
+	if (length < 0 || length > INT32_MAX) {
 		res = TEE_ERROR_BAD_PARAMETERS;
 		goto out;
 	}
+	newsize = length;
 
 	fh = handle_lookup(&fs_handle_db, fd);
 	if (fh == NULL) {
@@ -949,11 +955,56 @@ int tee_rpmb_fs_ftruncate(int fd, tee_fs_off_t length)
 	if (res != TEE_SUCCESS)
 		goto out;
 
-	fh->fat_entry.data_size = 0;
-	fh->fat_entry.start_address = 0;
-	res = write_fat_entry(fh, false);
+	if (newsize > fh->fat_entry.data_size) {
+		/* Extend file */
+
+		pool_result = tee_mm_init(&p,
+					  RPMB_STORAGE_START_ADDRESS,
+					  fs_par->max_rpmb_address,
+					  RPMB_BLOCK_SIZE_SHIFT,
+					  TEE_MM_POOL_HI_ALLOC);
+		if (!pool_result) {
+			res = TEE_ERROR_OUT_OF_MEMORY;
+			goto out;
+		}
+		res = read_fat(fh, &p);
+		if (res != TEE_SUCCESS)
+			goto out;
+
+		mm = tee_mm_alloc(&p, newsize);
+		newbuf = calloc(newsize, 1);
+		if (!mm || !newbuf) {
+			res = TEE_ERROR_OUT_OF_MEMORY;
+			goto out;
+		}
+
+		if (fh->fat_entry.data_size) {
+			res = tee_rpmb_read(DEV_ID,
+					    fh->fat_entry.start_address,
+					    newbuf, fh->fat_entry.data_size);
+			if (res != TEE_SUCCESS)
+				goto out;
+		}
+
+		newaddr = tee_mm_get_smem(mm);
+		res = tee_rpmb_write(DEV_ID, newaddr, newbuf, newsize);
+		if (res != TEE_SUCCESS)
+			goto out;
+
+	} else {
+		/* Don't change file location */
+		newaddr = fh->fat_entry.start_address;
+	}
+
+	/* fh->pos is unchanged */
+	fh->fat_entry.data_size = newsize;
+	fh->fat_entry.start_address = newaddr;
+	res = write_fat_entry(fh, true);
 
 out:
+	if (pool_result)
+		tee_mm_final(&p);
+
 	if (res == TEE_SUCCESS)
 		return 0;
 
