@@ -708,7 +708,7 @@ int tee_rpmb_fs_write(int fd, uint8_t *buf, size_t size)
 	bool pool_result = false;
 	tee_mm_entry_t *mm;
 	size_t newsize;
-	uint8_t *newbuf;
+	uint8_t *newbuf = NULL;
 	uintptr_t newaddr;
 
 	DMSG("fd=%d buf=%p size=%zu", fd, buf, size);
@@ -800,6 +800,8 @@ int tee_rpmb_fs_write(int fd, uint8_t *buf, size_t size)
 out:
 	if (pool_result)
 		tee_mm_final(&p);
+	if (newbuf)
+		free(newbuf);
 
 	if (res == TEE_SUCCESS)
 		return size;
@@ -970,7 +972,7 @@ int tee_rpmb_fs_ftruncate(int fd, tee_fs_off_t length)
 	bool pool_result = false;
 	tee_mm_entry_t *mm;
 	uint32_t newsize;
-	uint8_t *newbuf;
+	uint8_t *newbuf = NULL;
 	uintptr_t newaddr;
 	TEE_Result res = TEE_ERROR_GENERIC;
 
@@ -1039,6 +1041,8 @@ int tee_rpmb_fs_ftruncate(int fd, tee_fs_off_t length)
 out:
 	if (pool_result)
 		tee_mm_final(&p);
+	if (newbuf)
+		free(newbuf);
 
 	if (res == TEE_SUCCESS)
 		return 0;
@@ -1159,6 +1163,8 @@ static TEE_Result tee_rpmb_fs_dir_populate(const char *path, tee_fs_dir *dir)
 out:
 	if (res != TEE_SUCCESS)
 		tee_rpmb_fs_dir_free(dir);
+	if (fat_entries)
+		free(fat_entries);
 
 	return res;
 }
