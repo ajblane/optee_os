@@ -1271,7 +1271,7 @@ int tee_rpmb_fs_closedir(tee_fs_dir *dir)
 
 	DMSG("dir=%p", (void *)dir);
 	if (dir == NULL) {
-		res = TEE_ERROR_BAD_PARAMETERS;
+		res = TEE_SUCCESS;
 		goto out;
 	}
 
