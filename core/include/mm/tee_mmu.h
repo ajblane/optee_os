@@ -176,5 +176,6 @@ bool tee_mmu_kmap_is_mapped(void *va, size_t len);
 uint32_t tee_mmu_kmap_get_cache_attr(void *va);
 uint32_t tee_mmu_user_get_cache_attr(struct tee_ta_ctx *ctx, void *va);
 
+TEE_Result tee_mmu_register_shm(paddr_t pa, size_t len, uint32_t attr);
 
 #endif

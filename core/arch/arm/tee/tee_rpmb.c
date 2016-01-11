@@ -32,7 +32,6 @@
 #include <trace.h>
 #include <tee_api_types.h>
 #include <kernel/tee_common_otp.h>
-#include <kernel/tee_rpc.h>
 #include <kernel/thread.h>
 #include <kernel/tee_ta_manager.h>
 #include <tee/tee_rpmb.h>
@@ -40,7 +39,8 @@
 #include <kernel/tee_misc.h>
 #include <tee/tee_cryp_provider.h>
 #include <tee/tee_cryp_utl.h>
-#include <sm/teesmc.h>
+#include <optee_msg.h>
+#include <mm/tee_mmu.h>
 #include <mm/core_mmu.h>
 
 #define RPMB_DATA_OFFSET            (RPMB_STUFF_DATA_SIZE + RPMB_KEY_MAC_SIZE)
@@ -280,30 +280,29 @@ out:
 
 #endif /* !CFG_RPMB_TESTKEY */
 
-static void u32_to_bytes(uint32_t u32, uint8_t *bytes)
+static void u32_to_bytes(uint32_t u, uint8_t *bytes)
 {
-	*bytes = (uint8_t) (u32 >> 24);
-	*(bytes + 1) = (uint8_t) (u32 >> 16);
-	*(bytes + 2) = (uint8_t) (u32 >> 8);
-	*(bytes + 3) = (uint8_t) u32;
+	*bytes = (uint8_t)(u >> 24);
+	*(bytes + 1) = (uint8_t)(u >> 16);
+	*(bytes + 2) = (uint8_t)(u >> 8);
+	*(bytes + 3) = (uint8_t)u;
 }
 
-static void bytes_to_u32(uint8_t *bytes, uint32_t *u32)
+static void bytes_to_u32(uint8_t *bytes, uint32_t *u)
 {
-	*u32 = (uint32_t) ((*(bytes) << 24) +
-			   (*(bytes + 1) << 16) +
-			   (*(bytes + 2) << 8) + (*(bytes + 3)));
+	*u = (uint32_t)((*(bytes) << 24) + (*(bytes + 1) << 16) +
+			(*(bytes + 2) << 8) + (*(bytes + 3)));
 }
 
-static void u16_to_bytes(uint16_t u16, uint8_t *bytes)
+static void u16_to_bytes(uint16_t u, uint8_t *bytes)
 {
-	*bytes = (uint8_t) (u16 >> 8);
-	*(bytes + 1) = (uint8_t) u16;
+	*bytes = (uint8_t)(u >> 8);
+	*(bytes + 1) = (uint8_t)u;
 }
 
-static void bytes_to_u16(uint8_t *bytes, uint16_t *u16)
+static void bytes_to_u16(uint8_t *bytes, uint16_t *u)
 {
-	*u16 = (uint16_t) ((*bytes << 8) + *(bytes + 1));
+	*u = (uint16_t)((*bytes << 8) + *(bytes + 1));
 }
 
 static TEE_Result tee_rpmb_mac_calc(uint8_t *mac, uint32_t macsize,
@@ -346,12 +345,10 @@ func_exit:
 }
 
 struct tee_rpmb_mem {
-	struct teesmc32_arg *arg;
-	paddr_t pharg;
 	paddr_t phreq;
-	paddr_t phreq_cookie;
+	uint64_t creq;
 	paddr_t phresp;
-	paddr_t phresp_cookie;
+	uint64_t cresp;
 	size_t req_size;
 	size_t resp_size;
 };
@@ -379,14 +376,12 @@ static void tee_rpmb_free(struct tee_rpmb_mem *mem)
 	if (!mem)
 		return;
 
-	thread_rpc_free_arg(mem->pharg);
-	thread_optee_rpc_free_payload(mem->phreq_cookie);
-	thread_optee_rpc_free_payload(mem->phresp_cookie);
-	mem->pharg = 0;
+	thread_rpc_free(mem->creq);
+	thread_rpc_free(mem->cresp);
+	mem->creq = 0;
 	mem->phreq = 0;
-	mem->phreq_cookie = 0;
+	mem->cresp = 0;
 	mem->phresp = 0;
-	mem->phresp_cookie = 0;
 }
 
 
@@ -400,20 +395,23 @@ static TEE_Result tee_rpmb_alloc(size_t req_size, size_t resp_size,
 	if (!mem)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	mem->pharg = thread_rpc_alloc_arg(TEESMC32_GET_ARG_SIZE(2));
-	thread_optee_rpc_alloc_payload(req_s,
-				       &mem->phreq,
-				       &mem->phreq_cookie);
-	thread_optee_rpc_alloc_payload(resp_s,
-				       &mem->phresp,
-				       &mem->phresp_cookie);
-	if (!mem->pharg || !mem->phreq || !mem->phresp) {
+	mem->phreq = 0;
+	mem->creq = 0;
+	mem->phresp = 0;
+	mem->cresp = 0;
+
+	thread_rpc_alloc_payload(req_s, &mem->phreq, &mem->creq);
+	if (!mem->phreq) {
+		res = TEE_ERROR_OUT_OF_MEMORY;
+		goto out;
+	}
+	thread_rpc_alloc_payload(resp_s, &mem->phresp, &mem->cresp);
+	if (!mem->phresp) {
 		res = TEE_ERROR_OUT_OF_MEMORY;
 		goto out;
 	}
 
-	if (core_pa2va(mem->pharg, &mem->arg) || core_pa2va(mem->phreq, req) ||
-	    core_pa2va(mem->phresp, resp)) {
+	if (core_pa2va(mem->phreq, req) || core_pa2va(mem->phresp, resp)) {
 		res = TEE_ERROR_GENERIC;
 		goto out;
 	}
@@ -429,32 +427,20 @@ out:
 
 static TEE_Result tee_rpmb_invoke(struct tee_rpmb_mem *mem)
 {
-	struct teesmc32_param *params;
+	struct optee_msg_param params[2];
 
-	memset(mem->arg, 0, TEESMC32_GET_ARG_SIZE(2));
+	memset(params, 0, sizeof(params));
+	params[0].attr = OPTEE_MSG_ATTR_TYPE_TMEM_INPUT;
+	params[1].attr = OPTEE_MSG_ATTR_TYPE_TMEM_OUTPUT;
 
-	mem->arg->cmd = TEE_RPC_RPMB_CMD;
-	/* In case normal world doesn't update anything */
-	mem->arg->ret = TEE_ERROR_GENERIC;
+	params[0].u.tmem.buf_ptr = mem->phreq;
+	params[0].u.tmem.size = mem->req_size;
+	params[0].u.tmem.shm_ref = mem->creq;
+	params[1].u.tmem.buf_ptr = mem->phresp;
+	params[1].u.tmem.size = mem->resp_size;
+	params[1].u.tmem.shm_ref = mem->cresp;
 
-	mem->arg->num_params = 2;
-	params = TEESMC32_GET_PARAMS(mem->arg);
-	params[0].attr = TEESMC_ATTR_TYPE_MEMREF_INPUT |
-			 (TEESMC_ATTR_CACHE_I_WRITE_THR |
-				TEESMC_ATTR_CACHE_O_WRITE_THR) <<
-					TEESMC_ATTR_CACHE_SHIFT;
-	params[1].attr = TEESMC_ATTR_TYPE_MEMREF_OUTPUT |
-			 (TEESMC_ATTR_CACHE_I_WRITE_THR |
-				TEESMC_ATTR_CACHE_O_WRITE_THR) <<
-					TEESMC_ATTR_CACHE_SHIFT;
-
-	params[0].u.memref.buf_ptr = mem->phreq;
-	params[0].u.memref.size = mem->req_size;
-	params[1].u.memref.buf_ptr = mem->phresp;
-	params[1].u.memref.size = mem->resp_size;
-
-	mem->arg->ret = thread_rpc_cmd(TEE_RPC_RPMB_CMD, 2, params);
-	return mem->arg->ret;
+	return thread_rpc_cmd(OPTEE_MSG_RPC_CMD_RPMB, 2, params);
 }
 
 

@@ -43,7 +43,7 @@
 #include <mm/core_memprot.h>
 #include <mm/core_mmu.h>
 #include <mm/tee_mmu_io.h>
-#include <sm/teesmc.h>
+#include <sm/optee_smc.h>
 #include <kernel/tz_ssvce.h>
 #include <kernel/panic.h>
 
@@ -63,8 +63,8 @@
 					 TEE_MATTR_PRW | TEE_MATTR_URWX | \
 					 TEE_MATTR_SECURE)
 
-#define TEE_MMU_UCACHE_DEFAULT_ATTR	(TEE_MATTR_I_WRITE_BACK | \
-					 TEE_MATTR_O_WRITE_BACK)
+#define TEE_MMU_UCACHE_DEFAULT_ATTR	(TEE_MATTR_CACHE_CACHED << \
+					 TEE_MATTR_CACHE_SHIFT)
 
 /* Support for 31 concurrent sessions */
 static uint32_t g_asid = 0xffffffff;
@@ -315,15 +315,11 @@ TEE_Result tee_mmu_map(struct tee_ta_ctx *ctx, struct tee_ta_param *param)
 		if (tee_pbuf_is_non_sec(p->memref.buffer, p->memref.size))
 			attr &= ~TEE_MATTR_SECURE;
 
-		if (param->param_attr[n] & TEESMC_ATTR_CACHE_I_WRITE_THR)
-			attr |= TEE_MATTR_I_WRITE_THR;
-		if (param->param_attr[n] & TEESMC_ATTR_CACHE_I_WRITE_BACK)
-			attr |= TEE_MATTR_I_WRITE_BACK;
-		if (param->param_attr[n] & TEESMC_ATTR_CACHE_O_WRITE_THR)
-			attr |= TEE_MATTR_O_WRITE_THR;
-		if (param->param_attr[n] & TEESMC_ATTR_CACHE_O_WRITE_BACK)
-			attr |= TEE_MATTR_O_WRITE_BACK;
-
+		if (param->param_attr[n] == OPTEE_SMC_SHM_CACHED)
+			attr |= TEE_MATTR_CACHE_CACHED << TEE_MATTR_CACHE_SHIFT;
+		else
+			attr |= TEE_MATTR_CACHE_NONCACHE <<
+				TEE_MATTR_CACHE_SHIFT;
 
 		res = tee_mmu_umap_add_param(ctx->mmu,
 				(paddr_t)p->memref.buffer, p->memref.size,
@@ -591,10 +587,13 @@ TEE_Result tee_mmu_kmap_helper(tee_paddr_t pa, size_t len, void **va)
 	attr = TEE_MATTR_VALID_BLOCK | TEE_MATTR_PRW | TEE_MATTR_GLOBAL;
 	if (tee_pbuf_is_sec(pa, len)) {
 		attr |= TEE_MATTR_SECURE;
-		attr |= TEE_MATTR_I_WRITE_BACK | TEE_MATTR_O_WRITE_BACK;
+		attr |= TEE_MATTR_CACHE_CACHED << TEE_MATTR_CACHE_SHIFT;
 	} else if (tee_pbuf_is_non_sec(pa, len)) {
 		if (core_mmu_is_shm_cached())
-			attr |= TEE_MATTR_I_WRITE_BACK | TEE_MATTR_O_WRITE_BACK;
+			attr |= TEE_MATTR_CACHE_CACHED << TEE_MATTR_CACHE_SHIFT;
+		else
+			attr |= TEE_MATTR_CACHE_NONCACHE <<
+				TEE_MATTR_CACHE_SHIFT;
 	} else
 		return TEE_ERROR_GENERIC;
 
@@ -774,6 +773,26 @@ void teecore_init_pub_ram(void)
 	default_nsec_shm_size = e - s;
 }
 
+#if 0
+TEE_Result tee_mmu_register_shm(paddr_t pa, size_t len, uint32_t attr)
+{
+	TEE_Result res;
+	/*
+	 * This function may only be called if shared memory isn't
+	 * already configured.
+	 */
+	if (default_nsec_shm_paddr || default_nsec_shm_size)
+		return TEE_ERROR_ACCESS_DENIED;
+
+	/* TODO call thread_try_lock_global() */
+
+
+out:
+	/* TODO call thread_unlock_global() */
+	return res;
+}
+#endif
+
 void *tee_mmu_ioremap(tee_paddr_t pa __unused, size_t len __unused)
 {
 	/* return (void *)ioremap((void *)pa, len); */
@@ -786,22 +805,6 @@ void tee_mmu_iounmap(void *va __unused)
 	/* iounmap(va); */
 }
 
-static uint32_t mattr_to_teesmc_cache_attr(uint32_t mattr)
-{
-	uint32_t attr = 0;
-
-	if (mattr & TEE_MATTR_I_WRITE_THR)
-		attr |= TEESMC_ATTR_CACHE_I_WRITE_THR;
-	if (mattr & TEE_MATTR_I_WRITE_BACK)
-		attr |= TEESMC_ATTR_CACHE_I_WRITE_BACK;
-	if (mattr & TEE_MATTR_O_WRITE_THR)
-		attr |= TEESMC_ATTR_CACHE_O_WRITE_THR;
-	if (mattr & TEE_MATTR_O_WRITE_BACK)
-		attr |= TEESMC_ATTR_CACHE_O_WRITE_BACK;
-
-	return attr;
-}
-
 uint32_t tee_mmu_kmap_get_cache_attr(void *va)
 {
 	TEE_Result res;
@@ -811,7 +814,7 @@ uint32_t tee_mmu_kmap_get_cache_attr(void *va)
 	res = tee_mmu_kmap_va2pa_attr(va, &pa, &attr);
 	assert(res == TEE_SUCCESS);
 
-	return mattr_to_teesmc_cache_attr(attr);
+	return (attr >> TEE_MATTR_CACHE_SHIFT) & TEE_MATTR_CACHE_MASK;
 }
 
 
@@ -824,5 +827,5 @@ uint32_t tee_mmu_user_get_cache_attr(struct tee_ta_ctx *ctx, void *va)
 	res = tee_mmu_user_va2pa_attr(ctx, va, &pa, &attr);
 	assert(res == TEE_SUCCESS);
 
-	return mattr_to_teesmc_cache_attr(attr);
+	return (attr >> TEE_MATTR_CACHE_SHIFT) & TEE_MATTR_CACHE_MASK;
 }

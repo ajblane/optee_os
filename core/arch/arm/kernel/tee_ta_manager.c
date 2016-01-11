@@ -49,8 +49,6 @@
 #include <kernel/tee_ta_static.h>
 #include <mm/tee_mm.h>
 #include <trace.h>
-#include <kernel/tee_rpc.h>
-#include <kernel/tee_rpc_types.h>
 #include <kernel/mutex.h>
 #include <tee/tee_obj.h>
 #include <tee/tee_svc_storage.h>
@@ -60,7 +58,7 @@
 #include <mm/core_memprot.h>
 #include <mm/core_mmu.h>
 #include <kernel/thread.h>
-#include <sm/teesmc.h>
+#include <optee_msg.h>
 #include <kernel/tee_misc.h>
 #include <ta_pub_key.h>
 #include <kernel/tee_kta_trace.h>
@@ -99,7 +97,6 @@ static struct condvar tee_ta_cv = CONDVAR_INITIALIZER;
 static int tee_ta_single_instance_thread = THREAD_ID_INVALID;
 static size_t tee_ta_single_instance_count;
 
-static TEE_Result tee_ta_rpc_free(uint32_t handle);
 
 /*
  * Get/Set resisdent session, to leave/re-enter session execution context.
@@ -933,82 +930,88 @@ cleanup_return:
  * Function is not thread safe
  */
 static TEE_Result tee_ta_rpc_load(const TEE_UUID *uuid,
-			struct shdr **ta,
-			uint32_t *handle,
+			struct shdr **ta, uint64_t *cookie_ta,
 			uint32_t *ret_orig)
 {
 	TEE_Result res;
-	struct teesmc32_param params[2];
+	struct optee_msg_param params[2];
 	paddr_t phpayload = 0;
-	paddr_t cookie = 0;
-	struct tee_rpc_load_ta_cmd *cmd_load_ta;
-	uint32_t lhandle;
+	uint64_t cpayload = 0;
+	paddr_t phta = 0;
+	uint64_t cta = 0;
+	TEE_UUID *cmd_uuid;
 
-	if (!uuid || !ta || !handle || !ret_orig)
+	if (!uuid || !ta || !ret_orig)
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	/* get a rpc buffer */
-	thread_optee_rpc_alloc_payload(sizeof(struct tee_rpc_load_ta_cmd),
-				   &phpayload, &cookie);
+	thread_rpc_alloc_payload(sizeof(TEE_UUID), &phpayload, &cpayload);
 	if (!phpayload) {
 		*ret_orig = TEE_ORIGIN_TEE;
 		return TEE_ERROR_OUT_OF_MEMORY;
 	}
 
-	if (!ALIGNMENT_IS_OK(phpayload, struct tee_rpc_load_ta_cmd)) {
+	if (!ALIGNMENT_IS_OK(phpayload, TEE_UUID)) {
 		*ret_orig = TEE_ORIGIN_TEE;
 		res = TEE_ERROR_GENERIC;
 		goto out;
 	}
 
-	if (core_pa2va(phpayload, &cmd_load_ta)) {
+	if (core_pa2va(phpayload, &cmd_uuid)) {
 		*ret_orig = TEE_ORIGIN_TEE;
 		res = TEE_ERROR_GENERIC;
 		goto out;
 	}
 
 	memset(params, 0, sizeof(params));
-	params[0].attr = TEESMC_ATTR_TYPE_MEMREF_INOUT |
-			 TEESMC_ATTR_CACHE_DEFAULT << TEESMC_ATTR_CACHE_SHIFT;
-	params[1].attr = TEESMC_ATTR_TYPE_MEMREF_OUTPUT |
-			 TEESMC_ATTR_CACHE_DEFAULT << TEESMC_ATTR_CACHE_SHIFT;
+	params[0].attr = OPTEE_MSG_ATTR_TYPE_TMEM_INOUT;
+	params[1].attr = OPTEE_MSG_ATTR_TYPE_TMEM_OUTPUT;
+	params[0].u.tmem.buf_ptr = phpayload;
+	params[0].u.tmem.size = sizeof(TEE_UUID);
+	params[0].u.tmem.shm_ref = cpayload;
+	params[1].u.tmem.buf_ptr = 0;
+	params[1].u.tmem.size = 0;
+	params[1].u.tmem.shm_ref = 0;
 
-	params[0].u.memref.buf_ptr = phpayload;
-	params[0].u.memref.size = sizeof(struct tee_rpc_load_ta_cmd);
-	params[1].u.memref.buf_ptr = 0;
-	params[1].u.memref.size = 0;
+	memcpy(cmd_uuid, uuid, sizeof(TEE_UUID));
 
-	memset(cmd_load_ta, 0, sizeof(struct tee_rpc_load_ta_cmd));
-	memcpy(&cmd_load_ta->uuid, uuid, sizeof(TEE_UUID));
-
-	res = thread_rpc_cmd(TEE_RPC_LOAD_TA, 2, params);
+	res = thread_rpc_cmd(OPTEE_MSG_RPC_CMD_LOAD_TA, 2, params);
 	if (res != TEE_SUCCESS) {
 		*ret_orig = TEE_ORIGIN_COMMS;
 		goto out;
 	}
 
-	lhandle = cmd_load_ta->supp_ta_handle;
-	if (core_pa2va(params[1].u.memref.buf_ptr, ta)) {
-		tee_ta_rpc_free(lhandle);
+	thread_rpc_alloc_payload(params[1].u.tmem.size, &phta, &cta);
+	if (!phta) {
+		*ret_orig = TEE_ORIGIN_TEE;
+		res = TEE_ERROR_OUT_OF_MEMORY;
+		goto out;
+	}
+
+	if (core_pa2va(phta, ta)) {
 		*ret_orig = TEE_ORIGIN_TEE;
 		res = TEE_ERROR_GENERIC;
 		goto out;
 	}
-	*handle = lhandle;
+	*cookie_ta = cta;
 
+	params[0].attr = OPTEE_MSG_ATTR_TYPE_TMEM_INOUT;
+	params[1].attr = OPTEE_MSG_ATTR_TYPE_TMEM_OUTPUT;
+	params[0].u.tmem.buf_ptr = phpayload;
+	params[0].u.tmem.size = sizeof(TEE_UUID);
+	params[0].u.tmem.shm_ref = cpayload;
+	params[1].u.tmem.buf_ptr = phta;
+	params[1].u.tmem.shm_ref = cta;
+	/* Note that params[1].u.tmem.size is already assigned */
+
+	memcpy(cmd_uuid, uuid, sizeof(TEE_UUID));
+
+	res = thread_rpc_cmd(OPTEE_MSG_RPC_CMD_LOAD_TA, 2, params);
 out:
-	thread_optee_rpc_free_payload(cookie);
+	thread_rpc_free(cpayload);
+	if (res != TEE_SUCCESS)
+		thread_rpc_free(cta);
 	return res;
-}
-
-static TEE_Result tee_ta_rpc_free(uint32_t handle)
-{
-	struct teesmc32_param params;
-
-	memset(&params, 0, sizeof(params));
-	params.attr = TEESMC_ATTR_TYPE_VALUE_INPUT;
-	params.u.value.a = handle;
-	return thread_rpc_cmd(TEE_RPC_FREE_TA, 1, &params);
 }
 
 static void tee_ta_destroy_context(struct tee_ta_ctx *ctx)
@@ -1305,7 +1308,7 @@ static TEE_Result tee_ta_init_session(TEE_ErrorOrigin *err,
 	TEE_Result res;
 	struct tee_ta_ctx *ctx;
 	struct shdr *ta = NULL;
-	uint32_t handle = 0;
+	uint64_t cookie_ta = 0;
 	struct tee_ta_session *s = calloc(1, sizeof(struct tee_ta_session));
 
 	*err = TEE_ORIGIN_TEE;
@@ -1343,16 +1346,16 @@ static TEE_Result tee_ta_init_session(TEE_ErrorOrigin *err,
 		goto out;
 
 	/* Request TA from tee-supplicant */
-	res = tee_ta_rpc_load(uuid, &ta, &handle, err);
+	res = tee_ta_rpc_load(uuid, &ta, &cookie_ta, err);
 	if (res != TEE_SUCCESS)
 		goto out;
 
 	res = tee_ta_init_session_with_signed_ta(uuid, ta, s);
 	/*
-	 * Free normal world shared memory now that the TA either has been
-	 * copied into secure memory or the TA failed to be initialized.
+	 * Free shared memory now that the TA either has been copied into
+	 * secure memory or the TA failed to be initialized.
 	 */
-	tee_ta_rpc_free(handle);
+	thread_rpc_free(cookie_ta);
 
 out:
 	if (res == TEE_SUCCESS) {
