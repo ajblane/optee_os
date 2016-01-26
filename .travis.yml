@@ -10,7 +10,7 @@ sudo: false
 cache:
   ccache: true
   directories:
-    - $HOME/downloads
+    - $HOME/cached
 
 before_install:
   # Install the cross compilers
@@ -33,7 +33,8 @@ before_script:
   - wget https://raw.githubusercontent.com/torvalds/linux/master/scripts/spelling.txt
   - cd $MYHOME
 
-  - export DL_DIR=$HOME/downloads
+  - export CACHED=$HOME/cached
+  - export DL_DIR=$CACHED/downloads
   - function _download() { url="$1"; f="${2:-$(basename $url)}"; if [ ! -e $DL_DIR/$f ] ; then mkdir -p $DL_DIR ; wget $url -O $DL_DIR/$f ; fi }
   - function download() { _download "$1" "" ; }
 
@@ -60,8 +61,12 @@ before_script:
   - mkdir $HOME/bin
   - (cd $HOME/bin && wget https://storage.googleapis.com/git-repo-downloads/repo && chmod +x repo)
   - export PATH=$HOME/bin:$PATH
+  # - This is the cached reference copy
+  - mkdir -p $CACHED/optee_repo_ref
+  - (cd $CACHED/optee_repo_ref && ( if [ ! -d .repo ] ; then repo init -u https://github.com/OP-TEE/manifest.git --mirror </dev/null ; fi ) && repo sync --no-clone-bundle --quiet -j 2)
+  # - This is the working copy
   - mkdir $HOME/optee_repo
-  - (cd $HOME/optee_repo && repo init -u https://github.com/OP-TEE/manifest.git </dev/null && repo sync --no-clone-bundle --no-tags --quiet -j 2)
+  - (cd $HOME/optee_repo && repo init -u https://github.com/OP-TEE/manifest.git --reference $CACHED/optee_repo_ref </dev/null && repo sync --no-clone-bundle --no-tags --quiet -j 2)
   - (cd $HOME/optee_repo/qemu && git submodule update --init dtc)
   - (cd $HOME/optee_repo && mv optee_os optee_os_old && ln -s $MYHOME optee_os)
   - cd $MYHOME
@@ -147,4 +152,4 @@ script:
   - PLATFORM=ls  PLATFORM_FLAVOR=ls1021aqds  make -j8 all -s
 
   # Run regression tests (xtest in QEMU)
-  - (cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE="ccache arm-linux-gnueabihf-" AARCH32_CROSS_COMPILE=arm-linux-gnueabihf- DUMP_LOGS_ON_ERROR=1)
+  - (cd ${HOME}/optee_repo/build && make -s -j8 check CROSS_COMPILE=arm-linux-gnueabihf- AARCH32_CROSS_COMPILE=arm-linux-gnueabihf- DUMP_LOGS_ON_ERROR=1)
