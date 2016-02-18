@@ -202,7 +202,7 @@ $3: $1 $(conf-file) FORCE
 guard-$2 := $$(subst -,_,$$(subst .,_,$$(subst /,_,$2)))
 
 $(2): $(3)
-	@set -e;							\
+	$(q)set -e;							\
 	$(cmd-echo-silent) '  CHK     $$@';			\
 	mkdir -p $$(dir $$@);					\
 	echo "#ifndef $$(guard-$2)" >$$@.tmp;			\
