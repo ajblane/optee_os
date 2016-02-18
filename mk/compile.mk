@@ -149,7 +149,7 @@ $(foreach f, $(gen-srcs), $(eval $(call \
 
 $(objs): $(conf-file)
 
-define gen-defines-file
+define gen-asm-defines-file
 # c-filename in $1
 # h-filename in $2
 # s-filename in $3
@@ -215,9 +215,9 @@ $(2): $(3)
 endef
 
 
-ifneq ($(defines-file),)
-h-file-$(defines-file) := $(out-dir)/$(sm)/include/generated/$(basename $(notdir $(defines-file))).h
-s-file-$(defines-file) := $(out-dir)/$(basename $(defines-file)).s
-$(eval $(call gen-defines-file,$(defines-file),$(h-file-$(defines-file)),$(s-file-$(defines-file))))
-defines-file :=
+ifneq ($(asm-defines-file),)
+h-file-$(asm-defines-file) := $(out-dir)/$(sm)/include/generated/$(basename $(notdir $(asm-defines-file))).h
+s-file-$(asm-defines-file) := $(out-dir)/$(basename $(asm-defines-file)).s
+$(eval $(call gen-asm-defines-file,$(asm-defines-file),$(h-file-$(asm-defines-file)),$(s-file-$(asm-defines-file))))
+asm-defines-file :=
 endif

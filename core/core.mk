@@ -86,7 +86,7 @@ $(out-dir)/core/ta_pub_key.c: $(TA_SIGN_KEY)
 	@$(q)mkdir -p $(out-dir)/core
 	@$(q)scripts/pem_to_pub_c.py --prefix ta_pub_key --key $< --out $@
 
-defines-file := core/arch/$(ARCH)/kernel/asm-defines.c
+asm-defines-file := core/arch/$(ARCH)/kernel/asm-defines.c
 include mk/compile.mk
 
 include $(platform-dir)/link.mk

@@ -28,7 +28,11 @@
 #include <types_ext.h>
 #include <kernel/thread.h>
 #include "thread_private.h"
-#include <gen-asm-defines.h>
+
+#define DEFINES void __defines(void); void __defines(void)
+
+#define DEFINE(def, val) \
+	asm volatile("\n==>" #def " %0 " #val : : "i" (val))
 
 DEFINES
 {
