@@ -149,15 +149,13 @@ $(foreach f, $(gen-srcs), $(eval $(call \
 
 $(objs): $(conf-file)
 
-define gen-asm-defines-file
+define _gen-asm-defines-file
 # c-filename in $1
 # h-filename in $2
 # s-filename in $3
 
-FORCE-GENSRC: $(2)
-
-comp-dep-$3	:= $$(dir $3).$$(notdir $3).d
-comp-cmd-file-$3:= $$(dir $3).$$(notdir $3).cmd
+comp-dep-$3	:= $$(dir $3)$$(notdir $3).d
+comp-cmd-file-$3:= $$(dir $3)$$(notdir $3).cmd
 comp-sm-$3	:= $(sm)
 
 
@@ -214,10 +212,12 @@ $(2): $(3)
 
 endef
 
+define gen-asm-defines-file
+$(call _gen-asm-defines-file,$1,$2,$(dir $2).$(notdir $(2:.h=.s)))
+endef
 
 ifneq ($(asm-defines-file),)
 h-file-$(asm-defines-file) := $(out-dir)/$(sm)/include/generated/$(basename $(notdir $(asm-defines-file))).h
-s-file-$(asm-defines-file) := $(out-dir)/$(basename $(asm-defines-file)).s
-$(eval $(call gen-asm-defines-file,$(asm-defines-file),$(h-file-$(asm-defines-file)),$(s-file-$(asm-defines-file))))
+$(eval $(call gen-asm-defines-file,$(asm-defines-file),$(h-file-$(asm-defines-file))))
 asm-defines-file :=
 endif
