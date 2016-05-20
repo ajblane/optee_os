@@ -15,30 +15,30 @@ cache:
 git:
   depth: 1000000
 
-before_install:
-  # Install the cross compilers
-  - wget http://releases.linaro.org/15.02/components/toolchain/binaries/arm-linux-gnueabihf/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf.tar.xz
-  - tar xf gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf.tar.xz
-  - export PATH=${PWD}/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf/bin:${PATH}
-  - arm-linux-gnueabihf-gcc --version
-  - wget http://releases.linaro.org/15.02/components/toolchain/binaries/aarch64-linux-gnu/gcc-linaro-4.9-2015.02-3-x86_64_aarch64-linux-gnu.tar.xz
-  - tar xf gcc-linaro-4.9-2015.02-3-x86_64_aarch64-linux-gnu.tar.xz
-  - export PATH=${PWD}/gcc-linaro-4.9-2015.02-3-x86_64_aarch64-linux-gnu/bin:${PATH}
-  - aarch64-linux-gnu-gcc --version
-
 before_script:
   # Store the home repository
   - export MYHOME=$PWD
+
+  # Cached downloads
+  - export DL_DIR=$HOME/downloads
+  - function _download() { url="$1"; f="${2:-$(basename $url)}"; if [ ! -e $DL_DIR/$f ] ; then mkdir -p $DL_DIR ; wget $url -O $DL_DIR/$f ; else echo "(cached)"; fi }
+  - function download() { _download "$1" "" ; }
+  # This will cache the extracted archive, not the archive itself. Assumes 'foo.tar.xz' extracts into 'foo/'
+  - function download_and_extract() { url=$"$1"; ext="${2:-.tar.xz}"; f=$(basename $url); d=$(basename $f $ext); if [ ! -d $DL_DIR/$d ]; then mkdir -p $DL_DIR; wget $url && tar xf $f -C $DL_DIR ; else echo "(cached)"; fi }
+
+  # Install the cross compilers
+  - download_and_extract http://releases.linaro.org/15.02/components/toolchain/binaries/arm-linux-gnueabihf/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf.tar.xz
+  - export PATH=${DL_DIR}/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf/bin:${PATH}
+  - arm-linux-gnueabihf-gcc --version
+  - download_and_extract http://releases.linaro.org/15.02/components/toolchain/binaries/aarch64-linux-gnu/gcc-linaro-4.9-2015.02-3-x86_64_aarch64-linux-gnu.tar.xz
+  - export PATH=${DL_DIR}/gcc-linaro-4.9-2015.02-3-x86_64_aarch64-linux-gnu/bin:${PATH}
+  - aarch64-linux-gnu-gcc --version
 
   # Download checkpatch.pl
   - export DST_KERNEL=$PWD/linux && mkdir -p $DST_KERNEL/scripts && cd $DST_KERNEL/scripts
   - wget https://raw.githubusercontent.com/torvalds/linux/master/scripts/checkpatch.pl && chmod a+x checkpatch.pl
   - wget https://raw.githubusercontent.com/torvalds/linux/master/scripts/spelling.txt
   - cd $MYHOME
-
-  - export DL_DIR=$HOME/downloads
-  - function _download() { url="$1"; f="${2:-$(basename $url)}"; if [ ! -e $DL_DIR/$f ] ; then mkdir -p $DL_DIR ; wget $url -O $DL_DIR/$f ; fi }
-  - function download() { _download "$1" "" ; }
 
   # Travis assigns 2 CPU cores to the container-based environment, so -j3 is
   # a good concurrency level
