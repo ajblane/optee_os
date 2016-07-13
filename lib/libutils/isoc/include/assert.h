@@ -28,18 +28,19 @@
 #define ASSERT_H
 
 #include <compiler.h>
+#include <trace.h>
 
 void _assert_break(void) __noreturn;
-void _assert_log(const char *expr, const char *file, int line);
+void _assert_log(const char *expr, const char *file, const int line,
+			const char *func);
 
 #define assert(expr) \
 	do { \
 		if (!(expr)) { \
-			_assert_log(#expr, __FILE__, __LINE__); \
+			_assert_log(#expr, __FILE__, __LINE__, __func__); \
 			_assert_break(); \
 		} \
 	} while (0)
-
 
 #define COMPILE_TIME_ASSERT(x) \
 	do { \

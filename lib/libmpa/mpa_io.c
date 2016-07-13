@@ -398,7 +398,7 @@ char *mpa_get_str(char *str, int mode, const mpanum n)
 {
 	char *s = str;
 
-	assert(str != 0);
+	assert(str);
 
 	/* insert a minus sign */
 	if (__mpanum_sign(n) == MPA_NEG_SIGN) {
