@@ -568,7 +568,6 @@ static TEE_Result decrypt(uint8_t *out, const struct rpmb_data_frame *frm,
 			memcpy(out, tmp + offset, size);
 			free(tmp);
 		} else {
-			TEE_ASSERT(!offset);
 			decrypt_block(out, frm->data, blk_idx, fek);
 		}
 #else

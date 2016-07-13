@@ -29,6 +29,7 @@
 #include <trace.h>
 #include <gpio.h>
 #include <io.h>
+#include <kernel/panic.h>
 #include <util.h>
 #include <drivers/pl061_gpio.h>
 

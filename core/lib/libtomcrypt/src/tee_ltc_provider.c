@@ -151,7 +151,7 @@ static TEE_Result tee_ltc_prng_init(struct tee_ltc_prng *prng)
 	int res;
 	int prng_index;
 
-	TEE_ASSERT(prng != NULL);
+	assert(prng);
 
 	prng_index = find_prng(prng->name);
 	if (prng_index == -1)

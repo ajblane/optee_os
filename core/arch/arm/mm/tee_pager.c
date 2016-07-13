@@ -483,7 +483,7 @@ static bool tee_pager_unhide_page(vaddr_t page_va)
 			uint32_t a = get_area_mattr(pmem->area);
 
 			/* page is hidden, show and move to back */
-			assert(pa == get_pmem_pa(pmem));
+			TEE_ASSERT(pa == get_pmem_pa(pmem));
 			/*
 			 * If it's not a dirty block, then it should be
 			 * read only.

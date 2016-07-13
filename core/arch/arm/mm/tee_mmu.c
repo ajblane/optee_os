@@ -619,8 +619,8 @@ uintptr_t tee_mmu_get_load_addr(const struct tee_ta_ctx *const ctx)
 {
 	const struct user_ta_ctx *utc = to_user_ta_ctx((void *)ctx);
 
-	TEE_ASSERT(utc->mmu && utc->mmu->table &&
-		   utc->mmu->size == TEE_MMU_UMAP_MAX_ENTRIES);
+	assert(utc->mmu && utc->mmu->table);
+	TEE_ASSERT(utc->mmu->size == TEE_MMU_UMAP_MAX_ENTRIES);
 
 	return utc->mmu->table[1].va;
 }
@@ -669,7 +669,6 @@ void teecore_init_pub_ram(void)
 
 #ifdef CFG_PL310
 	/* Allocate statically the l2cc mutex */
-	TEE_ASSERT((e - s) > 0);
 	tee_l2cc_store_mutex_boot_pa(s);
 	s += sizeof(uint32_t);		/* size of a pl310 mutex */
 #endif
@@ -680,12 +679,9 @@ void teecore_init_pub_ram(void)
 
 uint32_t tee_mmu_user_get_cache_attr(struct user_ta_ctx *utc, void *va)
 {
-	TEE_Result res;
 	paddr_t pa;
 	uint32_t attr;
 
-	res = tee_mmu_user_va2pa_attr(utc, va, &pa, &attr);
-	assert(res == TEE_SUCCESS);
-
+	TEE_ASSERT(tee_mmu_user_va2pa_attr(utc, va, &pa, &attr) == TEE_SUCCESS);
 	return (attr >> TEE_MATTR_CACHE_SHIFT) & TEE_MATTR_CACHE_MASK;
 }

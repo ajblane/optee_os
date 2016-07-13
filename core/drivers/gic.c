@@ -26,13 +26,13 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <assert.h>
 #include <drivers/gic.h>
 #include <kernel/interrupt.h>
+#include <kernel/panic.h>
 #include <util.h>
 #include <io.h>
 #include <trace.h>
-
-#include <assert.h>
 
 /* Offsets from gic.gicc_base */
 #define GICC_CTLR		(0x000)
@@ -194,8 +194,6 @@ static void gic_it_add(struct gic_data *gd, size_t it)
 	size_t idx = it / NUM_INTS_PER_REG;
 	uint32_t mask = 1 << (it % NUM_INTS_PER_REG);
 
-	assert(it <= gd->max_it); /* Not too large */
-
 	/* Disable the interrupt */
 	write32(mask, gd->gicd_base + GICD_ICENABLER(idx));
 	/* Make it non-pending */
@@ -212,7 +210,6 @@ static void gic_it_set_cpu_mask(struct gic_data *gd, size_t it,
 	uint32_t mask = 1 << (it % NUM_INTS_PER_REG);
 	uint32_t target, target_shift;
 
-	assert(it <= gd->max_it); /* Not too large */
 	/* Assigned to group0 */
 	assert(!(read32(gd->gicd_base + GICD_IGROUPR(idx)) & mask));
 
@@ -235,7 +232,6 @@ static void gic_it_set_prio(struct gic_data *gd, size_t it, uint8_t prio)
 	size_t idx = it / NUM_INTS_PER_REG;
 	uint32_t mask = 1 << (it % NUM_INTS_PER_REG);
 
-	assert(it <= gd->max_it); /* Not too large */
 	/* Assigned to group0 */
 	assert(!(read32(gd->gicd_base + GICD_IGROUPR(idx)) & mask));
 
@@ -250,7 +246,6 @@ static void gic_it_enable(struct gic_data *gd, size_t it)
 	size_t idx = it / NUM_INTS_PER_REG;
 	uint32_t mask = 1 << (it % NUM_INTS_PER_REG);
 
-	assert(it <= gd->max_it); /* Not too large */
 	/* Assigned to group0 */
 	assert(!(read32(gd->gicd_base + GICD_IGROUPR(idx)) & mask));
 	/* Not enabled yet */
@@ -265,7 +260,6 @@ static void gic_it_disable(struct gic_data *gd, size_t it)
 	size_t idx = it / NUM_INTS_PER_REG;
 	uint32_t mask = 1 << (it % NUM_INTS_PER_REG);
 
-	assert(it <= gd->max_it); /* Not too large */
 	/* Assigned to group0 */
 	assert(!(read32(gd->gicd_base + GICD_IGROUPR(idx)) & mask));
 
@@ -346,6 +340,9 @@ static void gic_op_add(struct itr_chip *chip, size_t it,
 {
 	struct gic_data *gd = container_of(chip, struct gic_data, chip);
 
+	if (it >= gd->max_it)
+		panic();
+
 	gic_it_add(gd, it);
 	/* Set the CPU mask to deliver interrupts to any online core */
 	gic_it_set_cpu_mask(gd, it, 0xff);
@@ -356,12 +353,18 @@ static void gic_op_enable(struct itr_chip *chip, size_t it)
 {
 	struct gic_data *gd = container_of(chip, struct gic_data, chip);
 
+	if (it >= gd->max_it)
+		panic();
+
 	gic_it_enable(gd, it);
 }
 
 static void gic_op_disable(struct itr_chip *chip, size_t it)
 {
 	struct gic_data *gd = container_of(chip, struct gic_data, chip);
+
+	if (it >= gd->max_it)
+		panic();
 
 	gic_it_disable(gd, it);
 }

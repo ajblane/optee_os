@@ -621,9 +621,10 @@ static void update_current_ctx(struct thread_specific_data *tsd)
 	 * If ctx->mmu == NULL we must not have user mapping active,
 	 * if ctx->mmu != NULL we must have user mapping active.
 	 */
-	assert(((ctx && is_user_ta_ctx(ctx) ?
+	if (((ctx && is_user_ta_ctx(ctx) ?
 			to_user_ta_ctx(ctx)->mmu : NULL) == NULL) ==
-		!core_mmu_user_mapping_is_active());
+					core_mmu_user_mapping_is_active())
+		panic();
 }
 
 void tee_ta_push_current_session(struct tee_ta_session *sess)

@@ -585,8 +585,7 @@ static int get_file_length(int fd, size_t *length)
 	size_t file_len;
 	int res;
 
-	TEE_ASSERT(length);
-
+	assert(length);
 	*length = 0;
 
 	res = ree_fs_lseek_ree(fd, 0, TEE_FS_SEEK_END);

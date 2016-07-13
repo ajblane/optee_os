@@ -25,13 +25,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <tee_api_types.h>
-#include <trace.h>
-
+#include <assert.h>
 #include <kernel/tee_common_unpg.h>
+#include <tee_api_types.h>
 #include <tee/se/apdu.h>
 #include <tee/se/util.h>
-
+#include <trace.h>
 #include <stdlib.h>
 
 #include "apdu_priv.h"
@@ -119,51 +118,51 @@ struct resp_apdu *alloc_resp_apdu(uint8_t le)
 
 uint8_t *resp_apdu_get_data(struct resp_apdu *apdu)
 {
-	TEE_ASSERT(apdu != NULL);
+	assert(apdu);
 	return apdu->resp_data;
 }
 
 size_t resp_apdu_get_data_len(struct resp_apdu *apdu)
 {
-	TEE_ASSERT(apdu != NULL);
+	assert(apdu);
 	return apdu->resp_data_len;
 }
 
 uint8_t resp_apdu_get_sw1(struct resp_apdu *apdu)
 {
-	TEE_ASSERT(apdu != NULL);
+	assert(apdu);
 	return apdu->sw1;
 }
 
 uint8_t resp_apdu_get_sw2(struct resp_apdu *apdu)
 {
-	TEE_ASSERT(apdu != NULL);
+	assert(apdu);
 	return apdu->sw2;
 }
 
 uint8_t *apdu_get_data(struct apdu_base *apdu)
 {
-	TEE_ASSERT(apdu != NULL);
+	assert(apdu);
 	return apdu->data_buf;
 }
 size_t apdu_get_length(struct apdu_base *apdu)
 {
-	TEE_ASSERT(apdu != NULL);
+	assert(apdu);
 	return apdu->length;
 }
 int apdu_get_refcnt(struct apdu_base *apdu)
 {
-	TEE_ASSERT(apdu != NULL);
+	assert(apdu);
 	return apdu->refcnt;
 }
 void apdu_acquire(struct apdu_base *apdu)
 {
-	TEE_ASSERT(apdu != NULL);
+	assert(apdu);
 	apdu->refcnt++;
 }
 void apdu_release(struct apdu_base *apdu)
 {
-	TEE_ASSERT(apdu != NULL);
+	assert(apdu);
 	apdu->refcnt--;
 	if (apdu->refcnt == 0)
 		free(apdu);
