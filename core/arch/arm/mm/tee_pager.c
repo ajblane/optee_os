@@ -26,6 +26,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <assert.h>
+#include <keep.h>
 #include <sys/queue.h>
 #include <kernel/abort.h>
 #include <kernel/panic.h>
@@ -44,7 +46,7 @@
 #include <trace.h>
 #include <utee_defines.h>
 #include <util.h>
-#include <keep.h>
+
 #include "pager_private.h"
 
 #define PAGER_AE_KEY_BITS	256
@@ -186,7 +188,9 @@ static void set_alias_area(tee_mm_entry_t *mm)
 
 	DMSG("0x%" PRIxVA " - 0x%" PRIxVA, smem, smem + nbytes);
 
-	TEE_ASSERT(!pager_alias_area);
+	if (pager_alias_area)
+		panic();
+
 	if (!ti->num_entries && !core_mmu_find_table(smem, UINT_MAX, ti)) {
 		DMSG("Can't find translation table");
 		panic();
@@ -205,8 +209,8 @@ static void set_alias_area(tee_mm_entry_t *mm)
 		panic();
 	}
 
-	TEE_ASSERT(!(smem & SMALL_PAGE_MASK));
-	TEE_ASSERT(!(nbytes & SMALL_PAGE_MASK));
+	if (smem & SMALL_PAGE_MASK || nbytes & SMALL_PAGE_MASK)
+		panic();
 
 	pager_alias_area = mm;
 	pager_alias_next_free = smem;
@@ -223,10 +227,8 @@ static void set_alias_area(tee_mm_entry_t *mm)
 
 static void generate_ae_key(void)
 {
-	TEE_Result res;
-
-	res = rng_generate(pager_ae_key, sizeof(pager_ae_key));
-	TEE_ASSERT(res == TEE_SUCCESS);
+	if (rng_generate(pager_ae_key, sizeof(pager_ae_key)) != TEE_SUCCESS)
+		panic();
 }
 
 void tee_pager_init(tee_mm_entry_t *mm_alias)
@@ -245,7 +247,9 @@ static void *pager_add_alias_page(paddr_t pa)
 
 	DMSG("0x%" PRIxPA, pa);
 
-	TEE_ASSERT(pager_alias_next_free && ti->num_entries);
+	if (!pager_alias_next_free || !ti->num_entries)
+		panic();
+
 	idx = core_mmu_va2idx(ti, pager_alias_next_free);
 	core_mmu_set_entry(ti, idx, pa, attr);
 	pager_alias_next_free += SMALL_PAGE_SIZE;
@@ -317,16 +321,13 @@ bool tee_pager_add_core_area(vaddr_t base, size_t size, uint32_t flags,
 	DMSG("0x%" PRIxPTR " - 0x%" PRIxPTR " : flags 0x%x, store %p, hashes %p",
 		base, base + size, flags, store, hashes);
 
-	TEE_ASSERT(!(base & SMALL_PAGE_MASK) &&
-			size && !(size & SMALL_PAGE_MASK));
-
-	if (!(flags & TEE_MATTR_PW))
-		TEE_ASSERT(store && hashes);
-	else if (flags & TEE_MATTR_PW)
-		TEE_ASSERT(!store && !hashes);
-	else
+	if (base & SMALL_PAGE_MASK || size & SMALL_PAGE_MASK || !size)
 		panic();
 
+	if (!(flags & TEE_MATTR_PW) && (!store || !hashes))
+		panic();
+	if ((flags & TEE_MATTR_PW) && (store || hashes))
+		panic();
 
 	tbl_va_size = (1 << ti->shift) * ti->num_entries;
 	if (!core_is_buffer_inside(base, size, ti->va_base, tbl_va_size)) {
@@ -483,7 +484,8 @@ static bool tee_pager_unhide_page(vaddr_t page_va)
 			uint32_t a = get_area_mattr(pmem->area);
 
 			/* page is hidden, show and move to back */
-			TEE_ASSERT(pa == get_pmem_pa(pmem));
+			if (pa != get_pmem_pa(pmem))
+				panic();
 			/*
 			 * If it's not a dirty block, then it should be
 			 * read only.
@@ -611,7 +613,8 @@ static struct tee_pager_pmem *tee_pager_get_page(uint32_t next_area_flags)
 	pmem->area = NULL;
 	if (next_area_flags & TEE_MATTR_LOCKED) {
 		/* Move page to lock list */
-		TEE_ASSERT(tee_pager_npages > 0);
+		if (tee_pager_npages <= 0)
+			panic();
 		tee_pager_npages--;
 		set_npages();
 		TAILQ_INSERT_TAIL(&tee_pager_lock_pmem_head, pmem, link);
@@ -830,10 +833,8 @@ void tee_pager_add_pages(vaddr_t vaddr, size_t npages, bool unmap)
 			continue;
 
 		pmem = malloc(sizeof(struct tee_pager_pmem));
-		if (pmem == NULL) {
-			EMSG("Can't allocate memory");
+		if (!pmem)
 			panic();
-		}
 
 		pmem->va_alias = pager_add_alias_page(pa);
 

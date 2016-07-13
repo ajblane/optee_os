@@ -25,29 +25,32 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
 #include <platform_config.h>
-#include <kernel/panic.h>
-#include <kernel/thread.h>
-#include <kernel/thread_defs.h>
-#include "thread_private.h"
-#include <sm/sm_defs.h>
-#include <sm/sm.h>
-#include <optee_msg.h>
-#include <sm/optee_smc.h>
+
 #include <arm.h>
-#include <kernel/tz_proc_def.h>
-#include <kernel/tz_proc.h>
-#include <kernel/misc.h>
-#include <mm/tee_mmu.h>
-#include <mm/core_memprot.h>
-#include <mm/tee_mmu_defs.h>
-#include <mm/tee_mm.h>
-#include <mm/tee_pager.h>
-#include <kernel/tee_ta_manager.h>
-#include <util.h>
-#include <trace.h>
 #include <assert.h>
 #include <keep.h>
+#include <kernel/misc.h>
+#include <kernel/panic.h>
+#include <kernel/tee_ta_manager.h>
+#include <kernel/thread.h>
+#include <kernel/thread_defs.h>
+#include <kernel/tz_proc.h>
+#include <kernel/tz_proc_def.h>
+#include <mm/core_memprot.h>
+#include <mm/tee_mm.h>
+#include <mm/tee_mmu.h>
+#include <mm/tee_mmu_defs.h>
+#include <mm/tee_pager.h>
+#include <optee_msg.h>
+#include <sm/optee_smc.h>
+#include <sm/sm_defs.h>
+#include <sm/sm.h>
+#include <trace.h>
+#include <util.h>
+
+#include "thread_private.h"
 
 #ifdef ARM32
 #define STACK_TMP_SIZE		1024
@@ -85,8 +88,8 @@ static struct thread_core_local thread_core_local[CFG_TEE_CORE_NB_CORE];
 #ifdef ARM64
 #define STACK_CANARY_SIZE	(8 * sizeof(uint32_t))
 #endif
-#define START_CANARY		0xdededede
-#define END_CANARY		0xabababab
+#define START_CANARY_VALUE	0xdededede
+#define END_CANARY_VALUE	0xabababab
 #define GET_START_CANARY(name, stack_num) name[stack_num][0]
 #define GET_END_CANARY(name, stack_num) \
 	name[stack_num][sizeof(name[stack_num]) / sizeof(uint32_t) - 1]
@@ -143,8 +146,8 @@ static void init_canaries(void)
 		uint32_t *start_canary = &GET_START_CANARY(name, n);	\
 		uint32_t *end_canary = &GET_END_CANARY(name, n);	\
 									\
-		*start_canary = START_CANARY;				\
-		*end_canary = END_CANARY;				\
+		*start_canary = START_CANARY_VALUE;			\
+		*end_canary = END_CANARY_VALUE;				\
 		DMSG("#Stack canaries for %s[%zu] with top at %p\n",	\
 			#name, n, (void *)(end_canary - 1));		\
 		DMSG("watch *%p\n", (void *)end_canary);		\
@@ -161,30 +164,45 @@ static void init_canaries(void)
 #endif/*CFG_WITH_STACK_CANARIES*/
 }
 
+#define CANARY_DIED(stack, loc, n) \
+	do { \
+		EMSG_RAW("Dead canary at %s of '%s[%u]'", #loc, #stack, n); \
+		panic(); \
+	} while (0)
+
 void thread_check_canaries(void)
 {
 #ifdef CFG_WITH_STACK_CANARIES
 	size_t n;
 
 	for (n = 0; n < ARRAY_SIZE(stack_tmp); n++) {
-		TEE_ASSERT(GET_START_CANARY(stack_tmp, n) == START_CANARY);
-		TEE_ASSERT(GET_END_CANARY(stack_tmp, n) == END_CANARY);
+		if (GET_START_CANARY(stack_tmp, n) != START_CANARY_VALUE)
+			CANARY_DIED(stack_tmp, start, n);
+		if (GET_END_CANARY(stack_tmp, n) != END_CANARY_VALUE)
+			CANARY_DIED(stack_tmp, end, n);
 	}
 
 	for (n = 0; n < ARRAY_SIZE(stack_abt); n++) {
-		TEE_ASSERT(GET_START_CANARY(stack_abt, n) == START_CANARY);
-		TEE_ASSERT(GET_END_CANARY(stack_abt, n) == END_CANARY);
+		if (GET_START_CANARY(stack_abt, n) != START_CANARY_VALUE)
+			CANARY_DIED(stack_abt, start, n);
+		if (GET_END_CANARY(stack_abt, n) != END_CANARY_VALUE)
+			CANARY_DIED(stack_abt, end, n);
+
 	}
 #if !defined(CFG_WITH_ARM_TRUSTED_FW)
 	for (n = 0; n < ARRAY_SIZE(stack_sm); n++) {
-		TEE_ASSERT(GET_START_CANARY(stack_sm, n) == START_CANARY);
-		TEE_ASSERT(GET_END_CANARY(stack_sm, n) == END_CANARY);
+		if (GET_START_CANARY(stack_sm, n) != START_CANARY_VALUE)
+			CANARY_DIED(stack_sm, start, n);
+		if (GET_END_CANARY(stack_sm, n) != END_CANARY_VALUE)
+			CANARY_DIED(stack_sm, end, n);
 	}
 #endif
 #ifndef CFG_WITH_PAGER
 	for (n = 0; n < ARRAY_SIZE(stack_thread); n++) {
-		TEE_ASSERT(GET_START_CANARY(stack_thread, n) == START_CANARY);
-		TEE_ASSERT(GET_END_CANARY(stack_thread, n) == END_CANARY);
+		if (GET_START_CANARY(stack_thread, n) != START_CANARY_VALUE)
+			CANARY_DIED(stack_thread, start, n);
+		if (GET_END_CANARY(stack_thread, n) != END_CANARY_VALUE)
+			CANARY_DIED(stack_thread, end, n);
 	}
 #endif
 #endif/*CFG_WITH_STACK_CANARIES*/
@@ -732,7 +750,7 @@ int thread_get_id(void)
 {
 	int ct = thread_get_id_may_fail();
 
-	assert((ct >= 0) && (ct < CFG_NUM_THREADS));
+	assert(ct >= 0 && ct < CFG_NUM_THREADS);
 	return ct;
 }
 

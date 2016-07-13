@@ -24,12 +24,14 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
 #include <types_ext.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <arm.h>
+#include <assert.h>
 #include <kernel/mutex.h>
 #include <kernel/panic.h>
 #include <kernel/static_ta.h>
@@ -49,7 +51,6 @@
 #include <trace.h>
 #include <utee_types.h>
 #include <util.h>
-#include <assert.h>
 
 /* This mutex protects the critical section in tee_ta_init_session */
 struct mutex tee_ta_mutex = MUTEX_INITIALIZER;
@@ -349,7 +350,8 @@ TEE_Result tee_ta_close_session(struct tee_ta_session *csess,
 
 	mutex_lock(&tee_ta_mutex);
 
-	TEE_ASSERT(ctx->ref_count > 0);
+	if (ctx->ref_count <= 0)
+		panic();
 	ctx->ref_count--;
 	if (!ctx->ref_count && !(ctx->flags & TA_FLAG_INSTANCE_KEEP_ALIVE)) {
 		DMSG("   ... Destroy TA ctx");

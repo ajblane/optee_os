@@ -26,10 +26,10 @@
  */
 
 #include <assert.h>
-#include <kernel/tee_common_unpg.h>
 #include <kernel/thread.h>
 #include <kernel/handle.h>
 #include <kernel/mutex.h>
+#include <kernel/panic.h>
 #include <mm/core_memprot.h>
 #include <optee_msg.h>
 #include <stdio.h>
@@ -744,7 +744,8 @@ static int read_and_decrypt_file(int fd,
 	if (res < 0)
 		return res;
 
-	TEE_ASSERT(file_size >= header_size);
+	if (file_size < header_size)
+		panic();
 
 	ciphertext = malloc(file_size);
 	if (!ciphertext) {
@@ -1441,7 +1442,7 @@ static int ree_fs_open(TEE_Result *errno, const char *file, int flags, ...)
 	struct tee_fs_fd *fdp = NULL;
 	bool file_exist;
 
-	assert(errno != NULL);
+	assert(errno);
 	*errno = TEE_SUCCESS;
 
 	if (!file) {
@@ -1562,7 +1563,7 @@ static tee_fs_off_t ree_fs_lseek(TEE_Result *errno, int fd,
 	size_t filelen;
 	struct tee_fs_fd *fdp = handle_lookup(&fs_handle_db, fd);
 
-	assert(errno != NULL);
+	assert(errno);
 	*errno = TEE_SUCCESS;
 
 	if (!fdp) {
@@ -1630,7 +1631,7 @@ static int ree_fs_ftruncate_internal(TEE_Result *errno, struct tee_fs_fd *fdp,
 	struct tee_fs_file_meta *new_meta = NULL;
 	uint8_t *buf = NULL;
 
-	assert(errno != NULL);
+	assert(errno);
 	*errno = TEE_SUCCESS;
 
 	if (!fdp) {
@@ -1755,7 +1756,7 @@ static int ree_fs_read(TEE_Result *errno, int fd, void *buf, size_t len)
 	uint8_t *data_ptr = buf;
 	struct tee_fs_fd *fdp = handle_lookup(&fs_handle_db, fd);
 
-	assert(errno != NULL);
+	assert(errno);
 	*errno = TEE_SUCCESS;
 
 	if (!fdp) {
@@ -1853,7 +1854,7 @@ static int ree_fs_write(TEE_Result *errno, int fd, const void *buf, size_t len)
 	size_t file_size;
 	int orig_pos;
 
-	assert(errno != NULL);
+	assert(errno);
 	*errno = TEE_SUCCESS;
 
 	if (!fdp) {
@@ -1995,7 +1996,8 @@ static int ree_fs_rename(const char *old, const char *new)
 	}
 
 	/* finally, link the meta file, rename operation completed */
-	TEE_ASSERT(meta_filename);
+	if (!meta_filename)
+		panic();
 
 	/*
 	 * TODO: This will cause memory leakage at previous strdup()

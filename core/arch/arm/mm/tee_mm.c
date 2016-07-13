@@ -25,6 +25,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <kernel/panic.h>
 #include <kernel/tee_common.h>
 #include <util.h>
 #include <trace.h>
@@ -175,7 +176,9 @@ tee_mm_entry_t *tee_mm_alloc(tee_mm_pool_t *pool, uint32_t size)
 				/* out of memory */
 				return NULL;
 		} else {
-			TEE_ASSERT(pool->hi > pool->lo);
+			if (pool->hi <= pool->lo)
+				panic();
+
 			remaining = (pool->hi - pool->lo);
 			remaining -= ((entry->offset + entry->size) <<
 				      pool->shift);

@@ -56,19 +56,20 @@
  */
 #include <platform_config.h>
 
-#include <types_ext.h>
-#include <inttypes.h>
-#include <string.h>
-#include <compiler.h>
+#include <arm.h>
 #include <assert.h>
-#include <trace.h>
-#include <mm/tee_mmu_defs.h>
-#include <mm/pgt_cache.h>
+#include <compiler.h>
+#include <inttypes.h>
 #include <kernel/thread.h>
 #include <kernel/panic.h>
 #include <kernel/misc.h>
-#include <arm.h>
+#include <mm/tee_mmu_defs.h>
+#include <mm/pgt_cache.h>
+#include <string.h>
+#include <trace.h>
+#include <types_ext.h>
 #include <util.h>
+
 #include "core_mmu_private.h"
 
 #ifndef DEBUG_XLAT_TABLE
@@ -392,8 +393,9 @@ static struct tee_mmap_region *init_xlation_table(struct tee_mmap_region *mm,
 			uint64_t *new_table = xlat_tables[next_xlat++];
 			/* Clear table before use */
 			memset(new_table, 0, XLAT_TABLE_SIZE);
+			if (next_xlat > MAX_XLAT_TABLES)
+				panic();
 
-			TEE_ASSERT(next_xlat <= MAX_XLAT_TABLES);
 			desc = TABLE_DESC | (uint64_t)(uintptr_t)new_table;
 
 			/* Recurse to fill in new table */
@@ -411,7 +413,7 @@ static struct tee_mmap_region *init_xlation_table(struct tee_mmap_region *mm,
 static unsigned int calc_physical_addr_size_bits(uint64_t max_addr)
 {
 	/* Physical address can't exceed 48 bits */
-	assert((max_addr & ADDR_MASK_48_TO_63) == 0);
+	assert(!(max_addr & ADDR_MASK_48_TO_63));
 
 	/* 48 bits address */
 	if (max_addr & ADDR_MASK_44_TO_47)
@@ -449,8 +451,8 @@ void core_init_mmu_tables(struct tee_mmap_region *mm)
 		debug_print(" %010" PRIxVA " %010" PRIxPA " %10zx %x",
 			    mm[n].va, mm[n].pa, mm[n].size, mm[n].attr);
 
-		TEE_ASSERT(IS_PAGE_ALIGNED(mm[n].pa) &&
-			   IS_PAGE_ALIGNED(mm[n].size));
+		if (!IS_PAGE_ALIGNED(mm[n].pa) || !IS_PAGE_ALIGNED(mm[n].size))
+			panic();
 
 		pa_end = mm[n].pa + mm[n].size - 1;
 		va_end = mm[n].va + mm[n].size - 1;

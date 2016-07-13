@@ -26,12 +26,13 @@
  */
 
 #include <assert.h>
-#include <kernel/tee_common_unpg.h>
+#include <stdlib.h>
+#include <string.h>
 #include <tee_api_types.h>
+#include <trace.h>
+
 #include <tee/se/apdu.h>
 #include <tee/se/util.h>
-#include <trace.h>
-#include <stdlib.h>
 
 #include "apdu_priv.h"
 

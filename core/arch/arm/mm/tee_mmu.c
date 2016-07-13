@@ -25,27 +25,27 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <assert.h>
-#include <stdlib.h>
-#include <types_ext.h>
 
 #include <arm.h>
-#include <util.h>
+#include <assert.h>
+#include <kernel/panic.h>
 #include <kernel/tee_common.h>
+#include <kernel/tee_misc.h>
+#include <kernel/tz_ssvce.h>
 #include <mm/tee_mmu.h>
 #include <mm/tee_mmu_types.h>
 #include <mm/tee_mmu_defs.h>
 #include <mm/pgt_cache.h>
-#include <user_ta_header.h>
 #include <mm/tee_mm.h>
-#include "tee_api_types.h"
-#include <kernel/tee_misc.h>
-#include <trace.h>
 #include <mm/core_memprot.h>
 #include <mm/core_mmu.h>
 #include <sm/optee_smc.h>
-#include <kernel/tz_ssvce.h>
-#include <kernel/panic.h>
+#include <stdlib.h>
+#include <trace.h>
+#include <types_ext.h>
+#include <user_ta_header.h>
+#include <util.h>
+#include "tee_api_types.h"
 
 #ifdef CFG_PL310
 #include <kernel/tee_l2cc_mutex.h>
@@ -620,7 +620,8 @@ uintptr_t tee_mmu_get_load_addr(const struct tee_ta_ctx *const ctx)
 	const struct user_ta_ctx *utc = to_user_ta_ctx((void *)ctx);
 
 	assert(utc->mmu && utc->mmu->table);
-	TEE_ASSERT(utc->mmu->size == TEE_MMU_UMAP_MAX_ENTRIES);
+	if (utc->mmu->size != TEE_MMU_UMAP_MAX_ENTRIES)
+		panic();
 
 	return utc->mmu->table[1].va;
 }
@@ -636,16 +637,18 @@ void teecore_init_ta_ram(void)
 	 * shared mem allcated from teecore */
 	core_mmu_get_mem_by_type(MEM_AREA_TA_RAM, &s, &e);
 	ps = virt_to_phys((void *)s);
-	TEE_ASSERT(ps);
 	pe = virt_to_phys((void *)(e - 1)) + 1;
-	TEE_ASSERT(pe);
 
-	TEE_ASSERT((ps & (CORE_MMU_USER_CODE_SIZE - 1)) == 0);
-	TEE_ASSERT((pe & (CORE_MMU_USER_CODE_SIZE - 1)) == 0);
+	if (!ps || (ps & (CORE_MMU_USER_CODE_SIZE - 1)) ||
+		(!pe) || (pe & (CORE_MMU_USER_CODE_SIZE - 1)))
+		panic();
+
 	/* extra check: we could rely on  core_mmu_get_mem_by_type() */
-	TEE_ASSERT(tee_pbuf_is_sec(ps, pe - ps) == true);
+	if (!tee_pbuf_is_sec(ps, pe - ps))
+		panic();
 
-	TEE_ASSERT(tee_mm_is_empty(&tee_mm_sec_ddr));
+	if (!tee_mm_is_empty(&tee_mm_sec_ddr))
+		panic();
 
 	/* remove previous config and init TA ddr memory pool */
 	tee_mm_final(&tee_mm_sec_ddr);
@@ -661,11 +664,12 @@ void teecore_init_pub_ram(void)
 	/* get virtual addr/size of NSec shared mem allcated from teecore */
 	core_mmu_get_mem_by_type(MEM_AREA_NSEC_SHM, &s, &e);
 
-	TEE_ASSERT(s < e);
-	TEE_ASSERT((s & SMALL_PAGE_MASK) == 0);
-	TEE_ASSERT((e & SMALL_PAGE_MASK) == 0);
+	if (s >= e || s & SMALL_PAGE_MASK || e & SMALL_PAGE_MASK)
+		panic();
+
 	/* extra check: we could rely on  core_mmu_get_mem_by_type() */
-	TEE_ASSERT(tee_vbuf_is_non_sec(s, e - s) == true);
+	if (!tee_vbuf_is_non_sec(s, e - s))
+		panic();
 
 #ifdef CFG_PL310
 	/* Allocate statically the l2cc mutex */
@@ -682,6 +686,8 @@ uint32_t tee_mmu_user_get_cache_attr(struct user_ta_ctx *utc, void *va)
 	paddr_t pa;
 	uint32_t attr;
 
-	TEE_ASSERT(tee_mmu_user_va2pa_attr(utc, va, &pa, &attr) == TEE_SUCCESS);
+	if (tee_mmu_user_va2pa_attr(utc, va, &pa, &attr) != TEE_SUCCESS)
+		panic();
+
 	return (attr >> TEE_MATTR_CACHE_SHIFT) & TEE_MATTR_CACHE_MASK;
 }
