@@ -30,8 +30,14 @@
 
 #include <compiler.h>
 
-#define panic()	__panic(__FILE__, __LINE__, __func__)
+/*
+ * panic() macro must expand itself __FILE__ and its friends.
+ * TODO: find a nice way for supporting "panic();" and "panic("some text");"
+ */
+#define panic(...)	__do_panic(__FILE__, __LINE__, __func__, (void *)0)
+#define panic_trace(s)	__do_panic(__FILE__, __LINE__, __func__, s)
 
-void __panic(const char *file, int line, const char *func) __noreturn;
+void __do_panic(const char *file, const int line, const char *func,
+		const char *msg) __noreturn;
 
 #endif /*KERNEL_PANIC_H*/
