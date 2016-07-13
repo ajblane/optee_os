@@ -621,7 +621,7 @@ uintptr_t tee_mmu_get_load_addr(const struct tee_ta_ctx *const ctx)
 
 	assert(utc->mmu && utc->mmu->table);
 	if (utc->mmu->size != TEE_MMU_UMAP_MAX_ENTRIES)
-		panic();
+		panic_trace("invalid size");
 
 	return utc->mmu->table[1].va;
 }
@@ -639,16 +639,16 @@ void teecore_init_ta_ram(void)
 	ps = virt_to_phys((void *)s);
 	pe = virt_to_phys((void *)(e - 1)) + 1;
 
-	if (!ps || (ps & (CORE_MMU_USER_CODE_SIZE - 1)) ||
-		(!pe) || (pe & (CORE_MMU_USER_CODE_SIZE - 1)))
-		panic();
+	if (!ps || (ps & CORE_MMU_USER_CODE_MASK) ||
+	    !pe || (pe & CORE_MMU_USER_CODE_MASK))
+		panic_trace("invalid TA RAM");
 
 	/* extra check: we could rely on  core_mmu_get_mem_by_type() */
 	if (!tee_pbuf_is_sec(ps, pe - ps))
-		panic();
+		panic_trace("TA RAM is not secure");
 
 	if (!tee_mm_is_empty(&tee_mm_sec_ddr))
-		panic();
+		panic_trace("TA RAM pool is not empty");
 
 	/* remove previous config and init TA ddr memory pool */
 	tee_mm_final(&tee_mm_sec_ddr);
@@ -665,11 +665,11 @@ void teecore_init_pub_ram(void)
 	core_mmu_get_mem_by_type(MEM_AREA_NSEC_SHM, &s, &e);
 
 	if (s >= e || s & SMALL_PAGE_MASK || e & SMALL_PAGE_MASK)
-		panic();
+		panic_trace("invalid PUB RAM");
 
 	/* extra check: we could rely on  core_mmu_get_mem_by_type() */
 	if (!tee_vbuf_is_non_sec(s, e - s))
-		panic();
+		panic_trace("PUB RAM is not non-secure");
 
 #ifdef CFG_PL310
 	/* Allocate statically the l2cc mutex */
@@ -687,7 +687,7 @@ uint32_t tee_mmu_user_get_cache_attr(struct user_ta_ctx *utc, void *va)
 	uint32_t attr;
 
 	if (tee_mmu_user_va2pa_attr(utc, va, &pa, &attr) != TEE_SUCCESS)
-		panic();
+		panic_trace("cannot get attr");
 
 	return (attr >> TEE_MATTR_CACHE_SHIFT) & TEE_MATTR_CACHE_MASK;
 }

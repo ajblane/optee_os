@@ -189,28 +189,24 @@ static void set_alias_area(tee_mm_entry_t *mm)
 	DMSG("0x%" PRIxVA " - 0x%" PRIxVA, smem, smem + nbytes);
 
 	if (pager_alias_area)
-		panic();
+		panic_trace("null pager_alias_area");
 
-	if (!ti->num_entries && !core_mmu_find_table(smem, UINT_MAX, ti)) {
-		DMSG("Can't find translation table");
-		panic();
-	}
-	if ((1 << ti->shift) != SMALL_PAGE_SIZE) {
-		DMSG("Unsupported page size in translation table %u",
-		     1 << ti->shift);
-		panic();
-	}
+	if (!ti->num_entries && !core_mmu_find_table(smem, UINT_MAX, ti))
+		panic_trace("Can't find translation table");
+
+	if ((1 << ti->shift) != SMALL_PAGE_SIZE)
+		panic_trace("Unsupported page size in translation table");
 
 	tbl_va_size = (1 << ti->shift) * ti->num_entries;
 	if (!core_is_buffer_inside(smem, nbytes,
 				   ti->va_base, tbl_va_size)) {
-		DMSG("area 0x%" PRIxVA " len 0x%zx doesn't fit it translation table 0x%" PRIxVA " len 0x%zx",
-			smem, nbytes, ti->va_base, tbl_va_size);
+		EMSG("area 0x%" PRIxVA " len 0x%zx doesn't fit it translation table 0x%" PRIxVA " len 0x%zx",
+			    smem, nbytes, ti->va_base, tbl_va_size);
 		panic();
 	}
 
 	if (smem & SMALL_PAGE_MASK || nbytes & SMALL_PAGE_MASK)
-		panic();
+		panic_trace("invalid area alignment");
 
 	pager_alias_area = mm;
 	pager_alias_next_free = smem;
@@ -228,7 +224,7 @@ static void set_alias_area(tee_mm_entry_t *mm)
 static void generate_ae_key(void)
 {
 	if (rng_generate(pager_ae_key, sizeof(pager_ae_key)) != TEE_SUCCESS)
-		panic();
+		panic_trace("failed to generate random");
 }
 
 void tee_pager_init(tee_mm_entry_t *mm_alias)
@@ -248,7 +244,7 @@ static void *pager_add_alias_page(paddr_t pa)
 	DMSG("0x%" PRIxPA, pa);
 
 	if (!pager_alias_next_free || !ti->num_entries)
-		panic();
+		panic_trace("invalid alias entry");
 
 	idx = core_mmu_va2idx(ti, pager_alias_next_free);
 	core_mmu_set_entry(ti, idx, pa, attr);
@@ -321,13 +317,16 @@ bool tee_pager_add_core_area(vaddr_t base, size_t size, uint32_t flags,
 	DMSG("0x%" PRIxPTR " - 0x%" PRIxPTR " : flags 0x%x, store %p, hashes %p",
 		base, base + size, flags, store, hashes);
 
-	if (base & SMALL_PAGE_MASK || size & SMALL_PAGE_MASK || !size)
+	if (base & SMALL_PAGE_MASK || size & SMALL_PAGE_MASK || !size) {
+		EMSG("invalid pager area [%" PRIxVA " +0x%zx]", base, size);
 		panic();
+	}
 
 	if (!(flags & TEE_MATTR_PW) && (!store || !hashes))
-		panic();
+		panic_trace("write pages cannot provide store or hashes");
+
 	if ((flags & TEE_MATTR_PW) && (store || hashes))
-		panic();
+		panic_trace("non-write pages must provide store and hashes");
 
 	tbl_va_size = (1 << ti->shift) * ti->num_entries;
 	if (!core_is_buffer_inside(base, size, ti->va_base, tbl_va_size)) {
@@ -401,8 +400,9 @@ static void encrypt_page(struct pager_rw_pstate *rwp, void *src, void *dst)
 	iv.iv[2] = rwp->iv;
 
 	if (!pager_aes_gcm_encrypt(pager_ae_key, sizeof(pager_ae_key),
-				   &iv, rwp->tag, src, dst, SMALL_PAGE_SIZE))
-		panic();
+					&iv, rwp->tag,
+					src, dst, SMALL_PAGE_SIZE))
+		panic_trace("gcm failed");
 }
 
 static void tee_pager_load_page(struct tee_pager_area *area, vaddr_t page_va,
@@ -485,7 +485,8 @@ static bool tee_pager_unhide_page(vaddr_t page_va)
 
 			/* page is hidden, show and move to back */
 			if (pa != get_pmem_pa(pmem))
-				panic();
+				panic_trace("unexpected pa");
+
 			/*
 			 * If it's not a dirty block, then it should be
 			 * read only.
@@ -614,7 +615,7 @@ static struct tee_pager_pmem *tee_pager_get_page(uint32_t next_area_flags)
 	if (next_area_flags & TEE_MATTR_LOCKED) {
 		/* Move page to lock list */
 		if (tee_pager_npages <= 0)
-			panic();
+			panic_trace("running out of page");
 		tee_pager_npages--;
 		set_npages();
 		TAILQ_INSERT_TAIL(&tee_pager_lock_pmem_head, pmem, link);
@@ -676,7 +677,6 @@ static bool pager_update_permissions(struct tee_pager_area *area,
 		abort_print_error(ai);
 		panic();
 	}
-
 }
 
 #ifdef CFG_TEE_CORE_DEBUG
@@ -834,7 +834,7 @@ void tee_pager_add_pages(vaddr_t vaddr, size_t npages, bool unmap)
 
 		pmem = malloc(sizeof(struct tee_pager_pmem));
 		if (!pmem)
-			panic();
+			panic("out of mem");
 
 		pmem->va_alias = pager_add_alias_page(pa);
 

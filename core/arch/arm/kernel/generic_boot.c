@@ -166,10 +166,12 @@ static size_t get_block_size(void)
 	unsigned l;
 
 	if (!core_mmu_find_table(CFG_TEE_RAM_START, UINT_MAX, &tbl_info))
-		panic();
+		panic_trace("can't find mmu tables");
+
 	l = tbl_info.level - 1;
 	if (!core_mmu_find_table(CFG_TEE_RAM_START, l, &tbl_info))
-		panic();
+		panic_trace("can't find mmu table upper level");
+
 	return 1 << tbl_info.shift;
 }
 
@@ -202,12 +204,10 @@ static void init_runtime(unsigned long pageable_part)
 	 */
 	if (!core_mmu_find_table(CFG_TEE_RAM_START, UINT_MAX,
 				 &tee_pager_tbl_info))
-		panic();
-	if (tee_pager_tbl_info.shift != SMALL_PAGE_SHIFT) {
-		EMSG("Unsupported page size in translation table %u",
-		     BIT(tee_pager_tbl_info.shift));
-		panic();
-	}
+		panic_trace("can't find mmu tables");
+
+	if (tee_pager_tbl_info.shift != SMALL_PAGE_SHIFT)
+		panic_trace("Unsupported page size in translation table");
 
 	thread_init_boot_thread();
 
@@ -247,7 +247,7 @@ static void init_runtime(unsigned long pageable_part)
 		res = hash_sha256_check(hash, page, SMALL_PAGE_SIZE);
 		if (res != TEE_SUCCESS) {
 			EMSG("Hash failed for page %zu at %p: res 0x%x",
-				n, page, res);
+				    n, page, res);
 			panic();
 		}
 	}
@@ -282,7 +282,7 @@ static void init_runtime(unsigned long pageable_part)
 			ROUNDUP(CFG_TEE_RAM_START + CFG_TEE_RAM_VA_SIZE,
 				block_size),
 			SMALL_PAGE_SHIFT, 0))
-		panic();
+		panic_trace("tee_mm_vcore init failed");
 
 	/*
 	 * Assign alias area for pager end of the small page block the rest
@@ -311,9 +311,11 @@ static void init_runtime(unsigned long pageable_part)
 	mm = tee_mm_alloc2(&tee_mm_vcore, (vaddr_t)__pageable_start,
 			   pageable_size);
 	assert(mm);
-	if (!tee_pager_add_core_area(tee_mm_get_smem(mm), tee_mm_get_bytes(mm),
-				     TEE_MATTR_PRX, paged_store, hashes))
-		panic();
+	if (!tee_pager_add_core_area(tee_mm_get_smem(mm),
+					  tee_mm_get_bytes(mm),
+					  TEE_MATTR_PRX, paged_store, hashes))
+		panic_trace("failed to add pageable to vcore");
+
 	tee_pager_add_pages((vaddr_t)__pageable_start,
 		ROUNDUP(init_size, SMALL_PAGE_SIZE) / SMALL_PAGE_SIZE, false);
 	tee_pager_add_pages((vaddr_t)__pageable_start +
@@ -481,7 +483,8 @@ static void init_fdt(unsigned long phys_fdt)
 	}
 
 	if (!core_mmu_add_mapping(MEM_AREA_IO_NSEC, phys_fdt, CFG_DTB_MAX_SIZE))
-		panic();
+		panic_trace("failed to map fdt");
+
 	fdt = phys_to_virt(phys_fdt, MEM_AREA_IO_NSEC);
 	if (!fdt)
 		panic();
@@ -489,23 +492,20 @@ static void init_fdt(unsigned long phys_fdt)
 	ret = fdt_open_into(fdt, fdt, CFG_DTB_MAX_SIZE);
 	if (ret < 0) {
 		EMSG("Invalid Device Tree at 0x%" PRIxPA ": error %d",
-		     phys_fdt, ret);
+			    phys_fdt, ret);
 		panic();
 	}
 
-	if (add_optee_dt_node(fdt)) {
-		EMSG("Failed to add OP-TEE Device Tree node");
-		panic();
-	}
-	if (add_optee_res_mem_dt_node(fdt)) {
-		EMSG("Failed to add OP-TEE reserved memory Device Tree node");
-		panic();
-	}
+	if (add_optee_dt_node(fdt))
+		panic_trace("Failed to add OP-TEE Device Tree node");
+
+	if (add_optee_res_mem_dt_node(fdt))
+		panic_trace("Failed to add OP-TEE reserved memory DT node");
 
 	ret = fdt_pack(fdt);
 	if (ret < 0) {
-		EMSG("Failed to pack Device Tree at 0x%" PRIxPA ": error %d",
-		     phys_fdt, ret);
+		EMSG("Failed to pack DT at 0x%" PRIxPA ": error %d",
+			    phys_fdt, ret);
 		panic();
 	}
 }

@@ -86,6 +86,7 @@ static void __mutex_unlock(struct mutex *m, const char *fname, int lineno)
 
 	if (m->value != MUTEX_VALUE_LOCKED)
 		panic();
+
 	thread_rem_mutex(m);
 	m->value = MUTEX_VALUE_UNLOCKED;
 
@@ -159,7 +160,7 @@ void mutex_destroy(struct mutex *m)
 	if (m->value != MUTEX_VALUE_UNLOCKED)
 		panic();
 	if (!wq_is_empty(&m->wq))
-		panic();
+		panic_trace("waitqueue not empty");
 }
 
 void condvar_init(struct condvar *cv)
@@ -170,7 +171,7 @@ void condvar_init(struct condvar *cv)
 void condvar_destroy(struct condvar *cv)
 {
 	if (cv->m && wq_have_condvar(&cv->m->wq, cv))
-		panic();
+		panic_trace("no condvar for mutex");
 
 	condvar_init(cv);
 }
@@ -226,7 +227,7 @@ static void __condvar_wait(struct condvar *cv, struct mutex *m,
 	/* Link this condvar to this mutex until reinitialized */
 	cpu_spin_lock(&cv->spin_lock);
 	if (cv->m && cv->m != m)
-		panic();
+		panic_trace("invalid mutex");
 
 	cv->m = m;
 	cpu_spin_unlock(&cv->spin_lock);

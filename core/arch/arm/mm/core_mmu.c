@@ -258,10 +258,9 @@ static void add_phys_mem(struct tee_mmap_region *memory_map, size_t num_elems,
 	DMSG("%s %d 0x%08" PRIxPA " size 0x%08zx",
 	     mem->name, mem->type, mem->addr, mem->size);
 	while (true) {
-		if (n >= (num_elems - 1)) {
-			EMSG("Out of entries (%zu) in memory_map", num_elems);
-			panic();
-		}
+		if (n >= (num_elems - 1))
+			panic_trace("out of mem map entries");
+
 		if (n == *last)
 			break;
 		pa = memory_map[n].pa;
@@ -310,7 +309,7 @@ static uint32_t type_to_attr(enum teecore_memtypes t)
 	case MEM_AREA_RES_VASPACE:
 		return 0;
 	default:
-		panic();
+		panic_trace("invalid type");
 	}
 }
 
@@ -407,10 +406,8 @@ void core_init_mmu_map(void)
 
 	for (n = 0; n < ARRAY_SIZE(secure_only); n++) {
 		if (pbuf_intersects(nsec_shared, secure_only[n].paddr,
-				    secure_only[n].size)) {
-			EMSG("Invalid memory access configuration: sec/nsec");
-			panic();
-		}
+				    secure_only[n].size))
+			panic_trace("Invalid memory access config: sec/nsec");
 	}
 
 	if (!mem_map_inited)
@@ -420,24 +417,19 @@ void core_init_mmu_map(void)
 	while (map->type != MEM_AREA_NOTYPE) {
 		switch (map->type) {
 		case MEM_AREA_TEE_RAM:
-			if (!pbuf_is_inside(secure_only, map->pa, map->size)) {
-				EMSG("TEE_RAM does not fit in secure_only");
-				panic();
-			}
+			if (!pbuf_is_inside(secure_only, map->pa, map->size))
+				panic_trace("TEE_RAM can't fit in secure_only");
+
 			map_tee_ram = map;
 			break;
 		case MEM_AREA_TA_RAM:
-			if (!pbuf_is_inside(secure_only, map->pa, map->size)) {
-				EMSG("TA_RAM does not fit in secure_only");
-				panic();
-			}
+			if (!pbuf_is_inside(secure_only, map->pa, map->size))
+				panic_trace("TA_RAM can't fit in secure_only");
 			map_ta_ram = map;
 			break;
 		case MEM_AREA_NSEC_SHM:
-			if (!pbuf_is_inside(nsec_shared, map->pa, map->size)) {
-				EMSG("NSEC_SHM does not fit in nsec_shared");
-				panic();
-			}
+			if (!pbuf_is_inside(nsec_shared, map->pa, map->size))
+				panic_trace("NS_SHM can't fit in nsec_shared");
 			map_nsec_shm = map;
 			break;
 		case MEM_AREA_IO_SEC:
@@ -445,17 +437,14 @@ void core_init_mmu_map(void)
 		case MEM_AREA_RES_VASPACE:
 			break;
 		default:
-			EMSG("Uhandled memtype %d", map->type);
-			panic();
+			panic_trace("Unhandled memory type");
 		}
 		map++;
 	}
 
 	/* Check that we have the mandatory memory areas defined */
-	if (!map_tee_ram || !map_ta_ram || !map_nsec_shm) {
-		EMSG("mapping area missing");
-		panic();
-	}
+	if (!map_tee_ram || !map_ta_ram || !map_nsec_shm)
+		panic_trace("mandatory area(s) not found");
 
 	core_init_mmu_tables(static_memory_map);
 }
@@ -948,22 +937,22 @@ static void check_pa_matches_va(void *va, paddr_t pa)
 	if (v >= user_va_base && v <= (user_va_base - 1 + user_va_size)) {
 		if (!core_mmu_user_mapping_is_active()) {
 			if (pa)
-				panic();
+				panic("bad va inside linear address space");
 			return;
 		}
 
 		res = tee_mmu_user_va2pa_helper(
 			to_user_ta_ctx(tee_mmu_get_ctx()), va, &p);
 		if ((res == TEE_SUCCESS) && (pa != p))
-			panic();
+			panic_trace("bad pa");
 		if ((res != TEE_SUCCESS) && pa)
-			panic();
+			panic_trace("false pa");
 		return;
 	}
 #ifdef CFG_WITH_PAGER
 	if (v >= CFG_TEE_LOAD_ADDR && v < core_mmu_linear_map_end) {
 		if (v != pa)
-			panic();
+			panic("bad va inside linear address space");
 		return;
 	}
 	if (v >= (CFG_TEE_LOAD_ADDR & ~CORE_MMU_PGDIR_MASK) &&

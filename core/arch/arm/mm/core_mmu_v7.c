@@ -167,7 +167,7 @@ static paddr_t core_mmu_get_main_ttb_pa(void)
 	paddr_t pa = (paddr_t)core_mmu_get_main_ttb_va();
 
 	if (pa & ~TEE_MMU_TTB_L1_MASK)
-		panic();
+		panic_trace("invalid core l1 table");
 	return pa;
 }
 
@@ -182,7 +182,7 @@ static paddr_t core_mmu_get_ul1_ttb_pa(void)
 	paddr_t pa = (paddr_t)core_mmu_get_ul1_ttb_va();
 
 	if (pa & ~TEE_MMU_TTB_UL1_MASK)
-		panic();
+		panic_trace("invalid user l1 table");
 	return pa;
 }
 
@@ -537,7 +537,7 @@ static paddr_t map_page_memarea(struct tee_mmap_region *mm)
 	uint32_t attr;
 
 	if (!l2)
-		panic();
+		panic_trace("no l2 table");
 
 	attr = mattr_to_desc(2, mm->attr);
 
@@ -591,11 +591,8 @@ static void map_memarea(struct tee_mmap_region *mm, uint32_t *ttb)
 	 * TODO: support mapping devices at a virtual address which isn't
 	 * the same as the physical address.
 	 */
-	if (mm->va < (TEE_MMU_UL1_NUM_ENTRIES * SECTION_SIZE)) {
-		EMSG("va 0x%" PRIxVA " conflicts with user ta address!",
-		     mm->va);
-		panic();
-	}
+	if (mm->va < (TEE_MMU_UL1_NUM_ENTRIES * SECTION_SIZE))
+		panic_trace("va conflicts with user ta address");
 
 	if ((mm->va | mm->pa | mm->size) & SECTION_MASK) {
 		region_size = SMALL_PAGE_SIZE;
@@ -604,11 +601,8 @@ static void map_memarea(struct tee_mmap_region *mm, uint32_t *ttb)
 		 * Need finer grained mapping, if small pages aren't
 		 * good enough, panic.
 		 */
-		if ((mm->va | mm->pa | mm->size) & SMALL_PAGE_MASK) {
-			EMSG("va 0x%" PRIxVA " pa 0x%" PRIxPA " size 0x%x can't be mapped",
-				mm->va, mm->pa, mm->size);
-			panic();
-		}
+		if ((mm->va | mm->pa | mm->size) & SMALL_PAGE_MASK)
+			panic_trace("memarea can't be mapped");
 
 		attr = mattr_to_desc(1, mm->attr | TEE_MATTR_TABLE);
 		pa = map_page_memarea(mm);

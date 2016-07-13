@@ -394,7 +394,7 @@ static struct tee_mmap_region *init_xlation_table(struct tee_mmap_region *mm,
 			/* Clear table before use */
 			memset(new_table, 0, XLAT_TABLE_SIZE);
 			if (next_xlat > MAX_XLAT_TABLES)
-				panic();
+				panic_trace("running out of xlat tables");
 
 			desc = TABLE_DESC | (uint64_t)(uintptr_t)new_table;
 
@@ -452,7 +452,7 @@ void core_init_mmu_tables(struct tee_mmap_region *mm)
 			    mm[n].va, mm[n].pa, mm[n].size, mm[n].attr);
 
 		if (!IS_PAGE_ALIGNED(mm[n].pa) || !IS_PAGE_ALIGNED(mm[n].size))
-			panic();
+			panic_trace("unaligned region");
 
 		pa_end = mm[n].pa + mm[n].size - 1;
 		va_end = mm[n].va + mm[n].size - 1;

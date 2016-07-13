@@ -352,6 +352,7 @@ TEE_Result tee_ta_close_session(struct tee_ta_session *csess,
 
 	if (ctx->ref_count <= 0)
 		panic();
+
 	ctx->ref_count--;
 	if (!ctx->ref_count && !(ctx->flags & TA_FLAG_INSTANCE_KEEP_ALIVE)) {
 		DMSG("   ... Destroy TA ctx");
@@ -626,7 +627,7 @@ static void update_current_ctx(struct thread_specific_data *tsd)
 	if (((ctx && is_user_ta_ctx(ctx) ?
 			to_user_ta_ctx(ctx)->mmu : NULL) == NULL) ==
 					core_mmu_user_mapping_is_active())
-		panic();
+		panic("unexpected active mapping");
 }
 
 void tee_ta_push_current_session(struct tee_ta_session *sess)
