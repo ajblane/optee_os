@@ -206,8 +206,8 @@ static void gic_it_add(struct gic_data *gd, size_t it)
 static void gic_it_set_cpu_mask(struct gic_data *gd, size_t it,
 				uint8_t cpu_mask)
 {
-	size_t idx = it / NUM_INTS_PER_REG;
-	uint32_t mask = 1 << (it % NUM_INTS_PER_REG);
+	size_t idx __maybe_unused = it / NUM_INTS_PER_REG;
+	uint32_t mask __maybe_unused = 1 << (it % NUM_INTS_PER_REG);
 	uint32_t target, target_shift;
 
 	/* Assigned to group0 */
@@ -229,8 +229,8 @@ static void gic_it_set_cpu_mask(struct gic_data *gd, size_t it,
 
 static void gic_it_set_prio(struct gic_data *gd, size_t it, uint8_t prio)
 {
-	size_t idx = it / NUM_INTS_PER_REG;
-	uint32_t mask = 1 << (it % NUM_INTS_PER_REG);
+	size_t idx __maybe_unused = it / NUM_INTS_PER_REG;
+	uint32_t mask __maybe_unused = 1 << (it % NUM_INTS_PER_REG);
 
 	/* Assigned to group0 */
 	assert(!(read32(gd->gicd_base + GICD_IGROUPR(idx)) & mask));
