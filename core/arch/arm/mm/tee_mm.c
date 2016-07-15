@@ -177,7 +177,7 @@ tee_mm_entry_t *tee_mm_alloc(tee_mm_pool_t *pool, uint32_t size)
 				return NULL;
 		} else {
 			if (pool->hi <= pool->lo)
-				panic_trace("invalid pool");
+				panic("invalid pool");
 
 			remaining = (pool->hi - pool->lo);
 			remaining -= ((entry->offset + entry->size) <<
@@ -291,7 +291,7 @@ void tee_mm_free(tee_mm_entry_t *p)
 		entry = entry->next;
 
 	if (!entry->next)
-		panic_trace("invalid mm_entry");
+		panic("invalid mm_entry");
 
 	entry->next = entry->next->next;
 

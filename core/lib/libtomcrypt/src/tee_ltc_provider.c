@@ -547,7 +547,7 @@ static void pool_postactions(void)
 	mpa_scratch_mem pool = (void *)_ltc_mempool_u32;
 
 	if (pool->last_offset)
-		panic_trace("release issue in mpa scratch memory");
+		panic("release issue in mpa scratch memory");
 	release_unused_mpa_scratch_memory();
 }
 

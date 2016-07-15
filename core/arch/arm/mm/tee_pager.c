@@ -189,13 +189,13 @@ static void set_alias_area(tee_mm_entry_t *mm)
 	DMSG("0x%" PRIxVA " - 0x%" PRIxVA, smem, smem + nbytes);
 
 	if (pager_alias_area)
-		panic_trace("null pager_alias_area");
+		panic("null pager_alias_area");
 
 	if (!ti->num_entries && !core_mmu_find_table(smem, UINT_MAX, ti))
-		panic_trace("Can't find translation table");
+		panic("Can't find translation table");
 
 	if ((1 << ti->shift) != SMALL_PAGE_SIZE)
-		panic_trace("Unsupported page size in translation table");
+		panic("Unsupported page size in translation table");
 
 	tbl_va_size = (1 << ti->shift) * ti->num_entries;
 	if (!core_is_buffer_inside(smem, nbytes,
@@ -206,7 +206,7 @@ static void set_alias_area(tee_mm_entry_t *mm)
 	}
 
 	if (smem & SMALL_PAGE_MASK || nbytes & SMALL_PAGE_MASK)
-		panic_trace("invalid area alignment");
+		panic("invalid area alignment");
 
 	pager_alias_area = mm;
 	pager_alias_next_free = smem;
@@ -224,7 +224,7 @@ static void set_alias_area(tee_mm_entry_t *mm)
 static void generate_ae_key(void)
 {
 	if (rng_generate(pager_ae_key, sizeof(pager_ae_key)) != TEE_SUCCESS)
-		panic_trace("failed to generate random");
+		panic("failed to generate random");
 }
 
 void tee_pager_init(tee_mm_entry_t *mm_alias)
@@ -244,7 +244,7 @@ static void *pager_add_alias_page(paddr_t pa)
 	DMSG("0x%" PRIxPA, pa);
 
 	if (!pager_alias_next_free || !ti->num_entries)
-		panic_trace("invalid alias entry");
+		panic("invalid alias entry");
 
 	idx = core_mmu_va2idx(ti, pager_alias_next_free);
 	core_mmu_set_entry(ti, idx, pa, attr);
@@ -323,10 +323,10 @@ bool tee_pager_add_core_area(vaddr_t base, size_t size, uint32_t flags,
 	}
 
 	if (!(flags & TEE_MATTR_PW) && (!store || !hashes))
-		panic_trace("write pages cannot provide store or hashes");
+		panic("write pages cannot provide store or hashes");
 
 	if ((flags & TEE_MATTR_PW) && (store || hashes))
-		panic_trace("non-write pages must provide store and hashes");
+		panic("non-write pages must provide store and hashes");
 
 	tbl_va_size = (1 << ti->shift) * ti->num_entries;
 	if (!core_is_buffer_inside(base, size, ti->va_base, tbl_va_size)) {
@@ -402,7 +402,7 @@ static void encrypt_page(struct pager_rw_pstate *rwp, void *src, void *dst)
 	if (!pager_aes_gcm_encrypt(pager_ae_key, sizeof(pager_ae_key),
 					&iv, rwp->tag,
 					src, dst, SMALL_PAGE_SIZE))
-		panic_trace("gcm failed");
+		panic("gcm failed");
 }
 
 static void tee_pager_load_page(struct tee_pager_area *area, vaddr_t page_va,
@@ -485,7 +485,7 @@ static bool tee_pager_unhide_page(vaddr_t page_va)
 
 			/* page is hidden, show and move to back */
 			if (pa != get_pmem_pa(pmem))
-				panic_trace("unexpected pa");
+				panic("unexpected pa");
 
 			/*
 			 * If it's not a dirty block, then it should be
@@ -615,7 +615,7 @@ static struct tee_pager_pmem *tee_pager_get_page(uint32_t next_area_flags)
 	if (next_area_flags & TEE_MATTR_LOCKED) {
 		/* Move page to lock list */
 		if (tee_pager_npages <= 0)
-			panic_trace("running out of page");
+			panic("running out of page");
 		tee_pager_npages--;
 		set_npages();
 		TAILQ_INSERT_TAIL(&tee_pager_lock_pmem_head, pmem, link);

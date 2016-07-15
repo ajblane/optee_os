@@ -31,11 +31,21 @@
 #include <compiler.h>
 
 /*
- * panic() macro must expand itself __FILE__ and its friends.
- * TODO: find a nice way for supporting "panic();" and "panic("some text");"
+ * Suppress GCC warning on expansion of the panic() macro with no argument:
+ *  'ISO C99 requires at least one argument for the "..." in a variadic macro'
+ * Occurs when '-pedantic' is combined with '-std=gnu99'.
+ * Suppression applies only to this file and the expansion of macros defined in
+ * this file.
  */
-#define panic(...)	__do_panic(__FILE__, __LINE__, __func__, (void *)0)
-#define panic_trace(s)	__do_panic(__FILE__, __LINE__, __func__, s)
+#pragma GCC system_header
+
+/*
+ * panic() macro must expand itself __FILE__ and its friends.
+ */
+#define _panic0() __do_panic(__FILE__, __LINE__, __func__, (void *)0)
+#define _panic1(s) __do_panic(__FILE__, __LINE__, __func__, s)
+#define _panic_fn(_0, _1, name, ...) name
+#define panic(...) _panic_fn(_0, ##__VA_ARGS__, _panic1, _panic0)(__VA_ARGS__)
 
 void __do_panic(const char *file, const int line, const char *func,
 		const char *msg) __noreturn;
