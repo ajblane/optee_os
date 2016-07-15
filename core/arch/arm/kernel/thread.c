@@ -166,7 +166,7 @@ static void init_canaries(void)
 
 #define CANARY_DIED(stack, loc, n) \
 	do { \
-		EMSG_RAW("Dead canary at %s of '%s[%u]'", #loc, #stack, n); \
+		EMSG_RAW("Dead canary at %s of '%s[%zu]'", #loc, #stack, n); \
 		panic(); \
 	} while (0)
 
