@@ -27,6 +27,7 @@
 
 #include "tomcrypt_mpa.h"
 #include <mpa.h>
+#include <trace.h>
 
 mpa_scratch_mem external_mem_pool;
 
@@ -556,6 +557,14 @@ static int exptmod(void *a, void *b, void *c, void *d)
 	if (memguard) {
 		deinit(d_tmp);
 	}
+	DMSG("a=");
+	DHEXDUMP(((mpanum)a)->d, ((mpanum)a)->size*8);
+	DMSG("b=");
+	DHEXDUMP(((mpanum)b)->d, ((mpanum)b)->size*8);
+	DMSG("c=");
+	DHEXDUMP(((mpanum)c)->d, ((mpanum)c)->size*8);
+	DMSG("d=");
+	DHEXDUMP(((mpanum)d)->d, ((mpanum)d)->size*8);
 	return CRYPT_OK;
 }
 

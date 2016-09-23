@@ -51,6 +51,10 @@
 #define RNG_BASE		0xD1010000
 #define RNG_REG_SIZE		0x18
 
+/* RSA */
+#define RSA_BASE		0xD1020000
+#define RSA_REG_SIZE		0xF28
+
 /* TEE core heap */
 #define HEAP_SIZE		(96 * 1024)
 

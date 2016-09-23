@@ -45,12 +45,16 @@
 
 #define STATS_NB_POOLS			3
 
+void hi16xx_rsa_debug(void);
+
 static TEE_Result get_alloc_stats(uint32_t type, TEE_Param p[4])
 {
 	struct malloc_stats *stats;
 	uint32_t size_to_retrieve;
 	uint32_t pool_id;
 	uint32_t i;
+
+	hi16xx_rsa_debug();
 
 	/*
 	 * p[0].value.a = pool id (from 0 to n)
