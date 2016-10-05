@@ -39,8 +39,6 @@
 #include <types_ext.h>
 #include <util.h>
 
-/* #define dsb() */
-
 /* ALG sub-controller registers */
 
 #define ALG_SC_RSA_RESET_DREQ	0x0A9C	/* [0] srst_dreq_rsa */
@@ -172,105 +170,6 @@ register_phys_mem(MEM_AREA_IO_SEC, RSA_BASE, RSA_REG_SIZE);
 static vaddr_t rsa;
 static vaddr_t alg;
 
-#if 0
-/*
- * This pre-computed table contains the product of small primes. It is used for
- * fast checking whether a candidate prime of up to 512/1024/2048 bits can be
- * divided by small primes.
- */
-static const uint32_t prediv_parms[128] = {
-	/* primes 3 to 1471 - 2048 bits */
-	0x2465a7bd, 0x85011e1c, 0x9e052792, 0x9fff268c, 0x82ef7efa, 0x416863ba,
-	0xa5acdb09, 0x71dba0cc, 0xac3ee499, 0x9345029f, 0x2cf810b9, 0x9e406aac,
-	0x5fce5dd6, 0x9d1c717d, 0xaea5d18a, 0xb913f456, 0x505679bc, 0x91c57d46,
-	0xd9888857, 0x862b36e2, 0xede2e473, 0xc1f0ab35, 0x9da25271, 0xaffe15ff,
-	0x240e299d, 0x0b04f4cd, 0x0e4d7c0e, 0x47b1a7ba, 0x007de89a, 0xae848fd5,
-	0xbdcd7f98, 0x15564eb0, 0x60ae14f1, 0x9cb50c29, 0x1f0bbd8e, 0xd1c4c7f8,
-	0xfc5fba51, 0x66200193, 0x9b532d92, 0xdac844a8, 0x431d400c, 0x832d039f,
-	0x5f900b27, 0x8a75219c, 0x2986140c, 0x79045d77, 0x59540854, 0xc31504dc,
-	0x56f1df5e, 0xebe7bee4, 0x47658b91, 0x7bf696d6, 0x927f2e24, 0x28fbeb34,
-	0x0e515cb9, 0x835d6387, 0x1be8bbe0, 0x9cf13445, 0x799f2e67, 0x78815157,
-	0x1a93b4c1, 0xeee55d1b, 0x9072e0b2, 0xf5c4607f,
-
-	/* primes 3 to 739 - 1024 bits */
-	0x02c85ff8, 0x70f24be8, 0x0f62b1ba, 0x6c20bd72, 0xb837efdf, 0x121206d8,
-	0x7db56b7d, 0x69fa4c02, 0x1c107c3c, 0xa206fe8f, 0xa7080ef5, 0x76effc82,
-	0xf9b10f57, 0x50656b77, 0x94b16afd, 0x70996e91, 0xaef6e0ad, 0x15e91b07,
-	0x1ac9b24d, 0x98b233ad, 0x86ee0555, 0x18e58e56, 0x638ef18b, 0xac5c74cb,
-	0x35bbb6e5, 0xdae2783d, 0xd1c0ce7d, 0xec4fc70e, 0x5186d411, 0xdf36368f,
-	0x061aa360, 0x11f30179,
-
-	/* primes 3 to 379 - 512 bits */
-	0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-	0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-	0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x106aa9fb, 0x7646fa6e,
-	0xb0813c28, 0xc5d5f09f, 0x077ec3ba, 0x238bfb99, 0xc1b631a2, 0x03e81187,
-	0x233db117, 0xcbc38405, 0x6ef04659, 0xa4a11de4,	0x9f7ecb29, 0xbada8f98,
-	0x0decece9, 0x2e30c48f
-};
-
-/* Key material */
-
-struct km512 {
-	uint8_t p[512/8];
-	uint8_t q[512/8];
-	uint8_t e[1024/8];
-};
-
-struct km1024 {
-	uint8_t p[1024/8];
-	uint8_t q[1024/8];
-	uint8_t e[2048/8];
-};
-
-struct km2048 {
-	uint8_t p[2048/8];
-	uint8_t q[2048/8];
-	uint8_t e[4096/8];
-};
-
-struct km {
-	struct km512 km512[4];
-	struct km1024 km1024[4];
-	struct km2048 km2048[4];
-};
-
-/* Key pairs */
-
-struct kp1024 {
-	uint8_t d[1024/8];
-	uint8_t e[1024/8];
-	uint8_t n[1024/8];
-};
-
-struct kp2048 {
-	uint8_t d[2048/8];
-	uint8_t e[2048/8];
-	uint8_t n[2048/8];
-};
-
-struct kp4096 {
-	uint8_t d[4096/8];
-	uint8_t e[4096/8];
-	uint8_t n[4096/8];
-};
-
-union kp {
-	struct kp1024 kp1024;
-	struct kp2048 kp2048;
-	struct kp4096 kp4096;
-};
-
-/* Space for key material and key pair generation is allocated dynamically */
-
-static struct win {
-	uint32_t prediv_parms[128];
-	struct km km;
-	union kp kp;
-} *win;
-
-#endif /* 0 */
-
 static void __maybe_unused cntpct_wait(int ms)
 {
 	uint64_t t0, t1;
@@ -311,24 +210,6 @@ static void alg_write32(uint32_t val, int offset)
 
 static void __maybe_unused dbg_show_status(void)
 {
-#if 0
-	size_t i;
-	uint32_t km_sum = 0;
-	uintptr_t l = (uintptr_t)&win->km;
-	uint32_t *p = (uint32_t *)l;
-	static uint32_t prev_km_sum = 0;
-
-	IMSG("RSA_CURR_KM_CNT=0x%08x", rsa_read32(RSA_CURR_KM_CNT));
-	IMSG("RSA_DFX_KM_ST=0x%08x", rsa_read32(RSA_DFX_KM_ST));
-
-	for (i = 0; i < sizeof(win->km)/4; i++)
-		km_sum ^= p[i];
-	IMSG("km_sum=0x%08x", km_sum);
-	if (km_sum != prev_km_sum) {
-		DHEXDUMP(p, sizeof(win->km));
-		prev_km_sum = km_sum;
-	}
-#endif
 	DUMP_REG(RSA_CURR_BUSY);
 	DUMP_REG(RSA_CURR_TASK);
 	DUMP_REG(RSA_CFG_ITASK);
@@ -428,252 +309,6 @@ static int __maybe_unused wait_for_idle(int ms)
 	return s;
 }
 
-static uint32_t dummy[129];
-
-/*
- * Enable the RSA module and start generating key material
- */
-static TEE_Result hi16xx_rsa_init(void)
-{
-	//size_t i;
-	union {
-		uint32_t val;
-		uint8_t byte[4];
-	} seed;
-	uint32_t val;
-
-	alg = (vaddr_t)phys_to_virt(ALG_SC_BASE, MEM_AREA_IO_SEC);
-	rsa = (vaddr_t)phys_to_virt(RSA_BASE, MEM_AREA_IO_SEC);
-
-#if 0
-	/* Allocate memory to receive generated key material and key pairs */
-	win = calloc(1, sizeof(*win));
-	if (!win)
-		return TEE_ERROR_OUT_OF_MEMORY;
-	memcpy(&win->prediv_parms, prediv_parms, sizeof(prediv_parms));
-#endif
-
-	/* De-activate software reset */
-	val = alg_read32(ALG_SC_RSA_RESET_DREQ);
-	alg_write32(val | BIT(0), ALG_SC_RSA_RESET_DREQ);
-
-	/* Enable clock */
-	val = alg_read32(ALG_SC_RSA_CLK_EN);
-	alg_write32(val | BIT(0), ALG_SC_RSA_CLK_EN);
-
-//	val = rsa_read32(RSA_ECC_BYPASS);
-//	rsa_write32(val & ~BIT(0), RSA_ECC_BYPASS);
-
-	/* Configure non-secure mode, because output mem is non-secure */
-	val = alg_read32(ALG_SC_DBG_AUTH_CTRL);
-	alg_write32(val & ~BIT(1), ALG_SC_DBG_AUTH_CTRL);
-
-	/* Set big-endian mode */
-	rsa_write32(RSA_CFG_RW_BIG_ENDIAN, RSA_CFG_END);
-
-	/* Set query mode */
-	rsa_write32(INTMSK_ALL, RSA_INTMSK);
-
-	/* Seed the PRBS from the RNG */
-	seed.byte[0] = hw_get_random_byte();
-	seed.byte[1] = hw_get_random_byte();
-	seed.byte[2] = hw_get_random_byte();
-	seed.byte[3] = hw_get_random_byte();
-	rsa_write32(seed.val, RSA_CFG_PRBS_SEED);
-	IMSG("RSA_CFG_PRBS_SEED=0x%08x", rsa_read32(RSA_CFG_PRBS_SEED));
-
-	/* With non-zero window addresses: RSA_NC_DAT_CFG_ERR=1 */
-	rsa_write32(virt_to_phys(&dummy[0]), RSA_SAFE_WINDOW_ADDR_L);
-	rsa_write32(virt_to_phys(&dummy[128]), RSA_SAFE_WINDOW_ADDR_H);
-	rsa_write32(0, RSA_SAFE_WINDOW_VMID);
-
-#if 0
-	/* Configure pre-division filtering parameters */
-	rsa_write32(virt_to_phys(&win->prediv_parms), RSA_CFG_PREDIV_ADDR);
-	rsa_write32(0, RSA_CFG_PREDIV_ADDR_VMID);
-	IMSG("RSA_CFG_PREDIV_ADDR=0x%08x", rsa_read32(RSA_CFG_PREDIV_ADDR));
-
-	/*
-	 * Configure the output addresses to receive the generated key material
-	 */
-	rsa_write32(virt_to_phys(&win->km.km512[0]), RSA_CFG1_KM_ADDR);
-	rsa_write32(0, RSA_CFG1_KM_ADDR_VMID);
-	rsa_write32(virt_to_phys(&win->km.km512[1]), RSA_CFG2_KM_ADDR);
-	rsa_write32(0, RSA_CFG2_KM_ADDR_VMID);
-	rsa_write32(virt_to_phys(&win->km.km512[2]), RSA_CFG3_KM_ADDR);
-	rsa_write32(0, RSA_CFG3_KM_ADDR_VMID);
-	rsa_write32(virt_to_phys(&win->km.km512[3]), RSA_CFG4_KM_ADDR);
-	rsa_write32(0, RSA_CFG4_KM_ADDR_VMID);
-
-	rsa_write32(virt_to_phys(&win->km.km1024[0]), RSA_CFG5_KM_ADDR);
-	rsa_write32(0, RSA_CFG5_KM_ADDR_VMID);
-	rsa_write32(virt_to_phys(&win->km.km1024[1]), RSA_CFG6_KM_ADDR);
-	rsa_write32(0, RSA_CFG6_KM_ADDR_VMID);
-	rsa_write32(virt_to_phys(&win->km.km1024[2]), RSA_CFG7_KM_ADDR);
-	rsa_write32(0, RSA_CFG7_KM_ADDR_VMID);
-	rsa_write32(virt_to_phys(&win->km.km1024[3]), RSA_CFG8_KM_ADDR);
-	rsa_write32(0, RSA_CFG8_KM_ADDR_VMID);
-
-	rsa_write32(virt_to_phys(&win->km.km2048[0]), RSA_CFG9_KM_ADDR);
-	rsa_write32(0, RSA_CFG9_KM_ADDR_VMID);
-	rsa_write32(virt_to_phys(&win->km.km2048[1]), RSA_CFG10_KM_ADDR);
-	rsa_write32(0, RSA_CFG10_KM_ADDR_VMID);
-	rsa_write32(virt_to_phys(&win->km.km2048[2]), RSA_CFG11_KM_ADDR);
-	rsa_write32(0, RSA_CFG11_KM_ADDR_VMID);
-	rsa_write32(virt_to_phys(&win->km.km2048[3]), RSA_CFG12_KM_ADDR);
-	rsa_write32(0, RSA_CFG12_KM_ADDR_VMID);
-
-	for (i = 0; i < 12; i++)
-		IMSG("RSA_CFG%zu_KM_ADDR=0x%08x", i + 1,
-		     rsa_read32(RSA_CFG1_KM_ADDR + i*8));
-
-	rsa_write32(virt_to_phys(win), RSA_SAFE_WINDOW_ADDR_L);
-	rsa_write32(virt_to_phys(win) + sizeof(*win),
-		 RSA_SAFE_WINDOW_ADDR_H);
-	rsa_write32(0, RSA_SAFE_WINDOW_VMID);
-
-	/* Enable key pair material generation (internal task) */
-	rsa_write32(ITASK_EN, RSA_CFG_ITASK);
-#endif
-
-	IMSG("Hi16xx RSA initialized");
-	return TEE_SUCCESS;
-}
-
-#if 0
-static int __maybe_unused gen_key_pair(size_t size __maybe_unused)
-{
-	int s __maybe_unused;
-	uint8_t *safe_start __maybe_unused;
-	uint8_t *safe_end __maybe_unused;
-	int count __maybe_unused = 0;
-
-	dbg_show_status();
-
-	/*
-	 * Note: KM generation works randomly. Sometimes it does, sometimes
-	 * RSA_CURR_KM_CNT is stuck at 0x000 or 0x100
-	 */
-	s = wait_for_km(size/2, 0);
-	if (s < 0)
-		return s;
-	if (!s) {
-		IMSG("Key material not available");
-		return -1;
-	}
-	IMSG("Key material available (enough for %d key pairs)", s);
-
-	s = wait_for_idle(0);
-	if (s < 0)
-		return s;
-
-	if (rsa_read32(RSA_RINT) & 0x1) {
-		IMSG("Unexpected: KG task completion interrupt is pending");
-		return -1;
-	}
-
-	rsa_write32(size/32 - 1, RSA_CFG_OTASK);
-	rsa_write32(virt_to_phys(&win->kp), RSA_CFG_RESULT_ADDR);
-	rsa_write32(0, RSA_CFG_RESULT_ADDR_VMID);
-
-	dsb();
-
-	/*
-	 * Note: I've never see this KG task complete, maybe because KG assumes
-	 * secure memory?
-	 */
-	IMSG("Starting KG");
-	rsa_write32(0x1, RSA_CTRL1_OTASK);
-
-	dsb();
-
-	IMSG("Waiting for end of KG");
-	while ((rsa_read32(RSA_RINT) & 0x1) == 0 && (count++ < 1000))
-		cntpct_wait(10);
-
-	if (rsa_read32(RSA_RINT) & 0x1)
-		IMSG("KG done");
-	else
-		IMSG("KG timeout");
-
-	return 0;
-}
-#endif
-
-/*
-static const uint8_t modulus[] = {
-	0xa5, 0x6e, 0x4a, 0x0e, 0x70, 0x10, 0x17, 0x58, 0x9a, 0x51, 0x87, 0xdc,
-	0x7e, 0xa8, 0x41, 0xd1,
-	0x56, 0xf2, 0xec, 0x0e, 0x36, 0xad, 0x52, 0xa4, 0x4d, 0xfe, 0xb1, 0xe6,
-	0x1f, 0x7a, 0xd9, 0x91,
-	0xd8, 0xc5, 0x10, 0x56, 0xff, 0xed, 0xb1, 0x62, 0xb4, 0xc0, 0xf2, 0x83,
-	0xa1, 0x2a, 0x88, 0xa3,
-	0x94, 0xdf, 0xf5, 0x26, 0xab, 0x72, 0x91, 0xcb, 0xb3, 0x07, 0xce, 0xab,
-	0xfc, 0xe0, 0xb1, 0xdf,
-	0xd5, 0xcd, 0x95, 0x08, 0x09, 0x6d, 0x5b, 0x2b, 0x8b, 0x6d, 0xf5, 0xd6,
-	0x71, 0xef, 0x63, 0x77,
-	0xc0, 0x92, 0x1c, 0xb2, 0x3c, 0x27, 0x0a, 0x70, 0xe2, 0x59, 0x8e, 0x6f,
-	0xf8, 0x9d, 0x19, 0xf1,
-	0x05, 0xac, 0xc2, 0xd3, 0xf0, 0xcb, 0x35, 0xf2, 0x92, 0x80, 0xe1, 0x38,
-	0x6b, 0x6f, 0x64, 0xc4,
-	0xef, 0x22, 0xe1, 0xe1, 0xf2, 0x0d, 0x0c, 0xe8, 0xcf, 0xfb, 0x22, 0x49,
-	0xbd, 0x9a, 0x21, 0x37,
-};
-
-static const uint8_t priv_exp[] = {
-	0x33, 0xa5, 0x04, 0x2a, 0x90, 0xb2, 0x7d, 0x4f, 0x54, 0x51, 0xca, 0x9b,
-	0xbb, 0xd0, 0xb4, 0x47,
-	0x71, 0xa1, 0x01, 0xaf, 0x88, 0x43, 0x40, 0xae, 0xf9, 0x88, 0x5f, 0x2a,
-	0x4b, 0xbe, 0x92, 0xe8,
-	0x94, 0xa7, 0x24, 0xac, 0x3c, 0x56, 0x8c, 0x8f, 0x97, 0x85, 0x3a, 0xd0,
-	0x7c, 0x02, 0x66, 0xc8,
-	0xc6, 0xa3, 0xca, 0x09, 0x29, 0xf1, 0xe8, 0xf1, 0x12, 0x31, 0x88, 0x44,
-	0x29, 0xfc, 0x4d, 0x9a,
-	0xe5, 0x5f, 0xee, 0x89, 0x6a, 0x10, 0xce, 0x70, 0x7c, 0x3e, 0xd7, 0xe7,
-	0x34, 0xe4, 0x47, 0x27,
-	0xa3, 0x95, 0x74, 0x50, 0x1a, 0x53, 0x26, 0x83, 0x10, 0x9c, 0x2a, 0xba,
-	0xca, 0xba, 0x28, 0x3c,
-	0x31, 0xb4, 0xbd, 0x2f, 0x53, 0xc3, 0xee, 0x37, 0xe3, 0x52, 0xce, 0xe3,
-	0x4f, 0x9e, 0x50, 0x3b,
-	0xd8, 0x0c, 0x06, 0x22, 0xad, 0x79, 0xc6, 0xdc, 0xee, 0x88, 0x35, 0x47,
-	0xc6, 0xa3, 0xb3, 0x25,
-};
- */
-
-/*
-static uint8_t a_le[] = {
-	0x42, 0xba, 0xdb, 0x7e, 0x13, 0x39, 0x4a, 0xa4, 0xaf, 0xc0, 0x0b, 0xd0, 0x6d, 0x35, 0xf1, 0x68,
-	0x83, 0xa1, 0xf2, 0xac, 0x14, 0x04, 0x00, 0x05, 0x1a, 0x02, 0x03, 0x0e, 0x2b, 0x05, 0x06, 0x09,
-	0x30, 0x21, 0x30, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01, 0x00,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-};
-
-static uint8_t b_le[] = {
-	0xa1, 0x58, 0x2e, 0x4c, 0xac, 0x35, 0x6d, 0xeb, 0x94, 0xce, 0xf4, 0x36, 0xc4, 0x16, 0xe4, 0xab,
-	0xdd, 0xa2, 0x3e, 0xef, 0x66, 0x0e, 0x59, 0x34, 0xe1, 0xf7, 0xf8, 0x21, 0x71, 0x66, 0x5a, 0x6e,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
-
-static uint8_t c_le[] = {
-	0x51, 0xcc, 0x89, 0xa4, 0xef, 0x39, 0xb5, 0x82, 0x43, 0x67, 0x88, 0x36, 0xf3, 0xa5, 0xf3, 0x41,
-	0x58, 0x05, 0x98, 0x37, 0x9f, 0x75, 0x36, 0x3d, 0x60, 0xc5, 0xf4, 0x1e, 0xbe, 0xc7, 0xc7, 0xc9,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
-
-static uint8_t d_le[] = {
-	0x4b, 0xac, 0x50, 0x7d, 0xff, 0xd9, 0x42, 0xe7, 0xa2, 0x41, 0xde, 0x8d, 0x9d, 0xda, 0x91, 0x04,
-	0x05, 0x0f, 0xeb, 0x6a, 0xd6, 0x1a, 0x5a, 0xe1, 0x82, 0xa2, 0x80, 0x4b, 0x83, 0x36, 0xfa, 0xc6,
-	0xab, 0xcb, 0x93, 0x25, 0xdc, 0xc4, 0x72, 0x6c, 0x53, 0x1c, 0x41, 0x94, 0x41, 0x8f, 0x76, 0xa8,
-	0x22, 0x40, 0x67, 0xf2, 0x26, 0x2d, 0x8d, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
-*/
-
 static uint8_t a_le[] = {
 	0x7c, 0xf5, 0xf2, 0x88, 0xe3, 0xe6, 0x68, 0x5e, 0x23, 0xb8, 0x99, 0x0e, 0x7b, 0x9c, 0x60, 0xf2,
 	0xcf, 0x5f, 0x41, 0xc1, 0x71, 0x06, 0x79, 0x5f, 0x8a, 0xf4, 0xb8, 0xd9, 0x2a, 0xce, 0x01, 0xc5,
@@ -733,7 +368,52 @@ static uint8_t d_le[] __maybe_unused = {
 	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01, 0x00,
 };
 
-static uint8_t a[256], b[256], c[256];
+static struct win {
+	uint8_t a[256], b[256], c[256], d[256];
+	uint32_t end __aligned(4);
+} win;
+
+#define a win.a
+#define b win.b
+#define c win.c
+#define d win.d
+
+/*
+ * Enable the RSA module and start generating key material
+ */
+static TEE_Result hi16xx_rsa_init(void)
+{
+	uint32_t val;
+
+	alg = (vaddr_t)phys_to_virt(ALG_SC_BASE, MEM_AREA_IO_SEC);
+	rsa = (vaddr_t)phys_to_virt(RSA_BASE, MEM_AREA_IO_SEC);
+
+
+	/* De-activate software reset */
+	val = alg_read32(ALG_SC_RSA_RESET_DREQ);
+	alg_write32(val | BIT(0), ALG_SC_RSA_RESET_DREQ);
+
+	/* Enable clock */
+	val = alg_read32(ALG_SC_RSA_CLK_EN);
+	alg_write32(val | BIT(0), ALG_SC_RSA_CLK_EN);
+
+	/* Configure non-secure mode, because output mem is non-secure */
+	val = alg_read32(ALG_SC_DBG_AUTH_CTRL);
+	alg_write32(val & ~BIT(1), ALG_SC_DBG_AUTH_CTRL);
+
+	/* Set big-endian mode */
+	rsa_write32(RSA_CFG_RW_BIG_ENDIAN, RSA_CFG_END);
+
+	/* Set query mode */
+	rsa_write32(INTMSK_ALL, RSA_INTMSK);
+
+	rsa_write32(virt_to_phys(&a[0]), RSA_SAFE_WINDOW_ADDR_L);
+	rsa_write32(virt_to_phys(&win.end), RSA_SAFE_WINDOW_ADDR_H);
+	rsa_write32(0, RSA_SAFE_WINDOW_VMID);
+
+	IMSG("Hi16xx RSA initialized");
+	return TEE_SUCCESS;
+}
 
 static void le2be(uint8_t *to, uint8_t *from, size_t size)
 {
@@ -773,16 +453,17 @@ static void test_rsa_sign(void)
 	M = a;
 	E = b;
 	N = c;
-	o = calloc(1, 256);
+	o = d;
 
 	/*
 	 * Configure outer task as Normal CODEC (NC) task for modular
 	 * exponentiation
 	 *   o = M ^ E (mod N)
-	 * ns (non-secure) means result is *not* in safe window
 	 */
 	val = rsa_read32(RSA_CFG_OTASK);
-	val |= BIT(22) /* ns */ | BIT(8) /* NC */ | (size/32 - 1);
+	/* ns (non-secure) means result is *not* in safe window */
+	//val |= BIT(22) /* ns */ | BIT(8) /* NC */ | (size/32 - 1);
+	val |= BIT(8) /* NC */ | (size/32 - 1);
 	rsa_write32(val, RSA_CFG_OTASK);
 
 	/* M */
@@ -814,8 +495,6 @@ static void test_rsa_sign(void)
 	DMSG("o=");
 	DHEXDUMP(o, size/8);
 	dbg_show_status();
-
-	free(o);
 }
 
 void hi16xx_rsa_debug(void);
