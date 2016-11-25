@@ -221,14 +221,14 @@ script:
 
 env:
   global:
-    secure: "k30FG3hL6dQywtvMeEjSM0FQ7A0r+AQriUkGSFv7bmwD3EX2H17tJsfZt/h3dj+Pj6lQPdhVg3YO6O6pksJLqBLyz86bN15JEik0e1zftZplzK00oT89eoQr+qgqyrbs6CZBRvS98EAneCNbvgJto9sIPJs0SGu0u31Pr06bTAg="
+    secure: "ldVGDOKjcMRk1E+aI+fCsOEV+yr/qjFemJJIgNGZz8tuEwDainpz1hyrUWLis2pjeyQvykcrg+IG+GIdfjJFdHDPhbzPAH7gYbWIOQoPU2lb0HjsR161TUmfjxEqyjShAJHrGQGxG/70AvNr8FOoWwJhfEzH4k+DZeZ9sp5j3L8="
 
 addons:
   coverity_scan:
     project:
-      name: "OP-TEE/optee_os"
+      name: "jforissier/optee_os"
       description: "Build submitted via Travis CI"
-    notification_email: op-tee@linaro.org
+    notification_email: jerome.forissier@linaro.org
     build_command_prepend: "cov-configure --comptype gcc --compiler arm-linux-gnueabihf-gcc --template"
     build_command: "make"
     branch_pattern: coverity_scan
