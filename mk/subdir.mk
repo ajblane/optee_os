@@ -113,6 +113,7 @@ sub-dir-out := $(out-dir)/$(base-prefix)
 else
 sub-dir-out := $(out-dir)/$(base-prefix)$1
 endif
+cleandirs := $$(cleandirs) $$(sub-dir-out)
 
 include $1/sub.mk
 sub-subdirs := $$(addprefix $1/,$$(subdirs-y))

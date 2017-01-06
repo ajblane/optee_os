@@ -67,6 +67,7 @@ $2/$$(notdir $1): $1
 	cp $$< $$@
 
 cleanfiles += $2/$$(notdir $1)
+cleandirs += $2
 all: $2/$$(notdir $1)
 endef
 

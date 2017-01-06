@@ -62,6 +62,7 @@ $(conf-file): $(conf-mk-file)
 
 cleanfiles += $(conf-file)
 cleanfiles += $(conf-mk-file)
+cleandirs += $(out-dir)/include/generated
 
 $(conf-file): FORCE
 	$(call check-conf-h)

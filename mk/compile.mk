@@ -221,6 +221,7 @@ endef
 
 define gen-asm-defines-file
 $(call _gen-asm-defines-file,$1,$2,$(dir $2).$(notdir $(2:.h=.s)))
+cleandirs += $(dir $2)
 endef
 
 ifneq ($(asm-defines-file),)
