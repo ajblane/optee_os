@@ -178,14 +178,25 @@ TEE_Result tee_svc_storage_create_dirname(void *buf, size_t blen,
 	return TEE_SUCCESS;
 }
 
-static TEE_Result tee_svc_storage_remove_corrupt_obj(
-					struct tee_ta_session *sess,
-					struct tee_obj *o)
+static TEE_Result remove_and_close_obj(struct user_ta_ctx *utc,
+				       struct tee_obj *o)
 {
-	o->pobj->fops->remove(o->pobj);
-	tee_obj_close(to_user_ta_ctx(sess->ctx), o);
+	TEE_Result res;
 
-	return TEE_SUCCESS;
+	/*
+	 * Closing any file descriptor in tee-supplicant *before* the data
+	 * container is removed is essential when using the REE FS and the
+	 * TEE data path is mounted over NFS. Otherwise, as the file is removed
+	 * the NFS server creates a temporary hidden file (.nfsXXX) to
+	 * represent the open fd. The directory is therefore not empty and
+	 * can't be removed.
+	 */
+	o->pobj->fops->close(&o->fh);
+	o->fh = NULL;
+	res = o->pobj->fops->remove(o->pobj);
+	tee_obj_close(utc, o);
+
+	return res;
 }
 
 static TEE_Result tee_svc_storage_read_head(struct tee_obj *o)
@@ -368,7 +379,7 @@ TEE_Result syscall_storage_obj_open(unsigned long storage_id, void *object_id,
 
 	res = tee_ta_get_current_session(&sess);
 	if (res != TEE_SUCCESS)
-		goto err;
+		goto exit;
 	utc = to_user_ta_ctx(sess->ctx);
 
 	res = tee_mmu_check_access_rights(utc,
@@ -424,7 +435,7 @@ err:
 	if (res == TEE_ERROR_NO_DATA || res == TEE_ERROR_BAD_FORMAT)
 		res = TEE_ERROR_CORRUPT_OBJECT;
 	if (res == TEE_ERROR_CORRUPT_OBJECT && o)
-		tee_svc_storage_remove_corrupt_obj(sess, o);
+		remove_and_close_obj(utc, o);
 
 exit:
 	free(file);
@@ -568,8 +579,7 @@ TEE_Result syscall_storage_obj_del(unsigned long obj)
 	if (o->pobj == NULL || o->pobj->obj_id == NULL)
 		return TEE_ERROR_BAD_STATE;
 
-	res = o->pobj->fops->remove(o->pobj);
-	tee_obj_close(utc, o);
+	res = remove_and_close_obj(utc, o);
 
 	return res;
 }
@@ -891,7 +901,7 @@ TEE_Result syscall_storage_obj_read(unsigned long obj, void *data, size_t len,
 		EMSG("Error code=%x\n", (uint32_t)res);
 		if (res == TEE_ERROR_CORRUPT_OBJECT) {
 			EMSG("Object corrupt\n");
-			tee_svc_storage_remove_corrupt_obj(sess, o);
+			remove_and_close_obj(utc, o);
 		}
 		goto exit;
 	}
@@ -962,13 +972,14 @@ TEE_Result syscall_storage_obj_trunc(unsigned long obj, size_t len)
 	struct tee_obj *o;
 	size_t off;
 	size_t attr_size;
+	struct user_ta_ctx *utc;
 
 	res = tee_ta_get_current_session(&sess);
 	if (res != TEE_SUCCESS)
 		goto exit;
+	utc = to_user_ta_ctx(sess->ctx);
 
-	res = tee_obj_get(to_user_ta_ctx(sess->ctx),
-			  tee_svc_uref_to_vaddr(obj), &o);
+	res = tee_obj_get(utc, tee_svc_uref_to_vaddr(obj), &o);
 	if (res != TEE_SUCCESS)
 		goto exit;
 
@@ -991,7 +1002,7 @@ TEE_Result syscall_storage_obj_trunc(unsigned long obj, size_t len)
 	if (res != TEE_SUCCESS) {
 		if (res == TEE_ERROR_CORRUPT_OBJECT) {
 			EMSG("Object corrupt\n");
-			res = tee_svc_storage_remove_corrupt_obj(sess, o);
+			res = remove_and_close_obj(utc, o);
 			if (res != TEE_SUCCESS)
 				goto exit;
 			res = TEE_ERROR_CORRUPT_OBJECT;

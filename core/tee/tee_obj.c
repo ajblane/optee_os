@@ -60,7 +60,8 @@ void tee_obj_close(struct user_ta_ctx *utc, struct tee_obj *o)
 	TAILQ_REMOVE(&utc->objects, o, link);
 
 	if ((o->info.handleFlags & TEE_HANDLE_FLAG_PERSISTENT)) {
-		o->pobj->fops->close(&o->fh);
+		if (o->fh)
+			o->pobj->fops->close(&o->fh);
 		tee_pobj_release(o->pobj);
 	}
 
