@@ -783,8 +783,7 @@ void core_init_mmu_tables(struct tee_mmap_region *mm)
 	memset(ttb1, 0, L1_TBL_SIZE);
 
 	for (n = 0; mm[n].size; n++)
-		if (!core_mmu_is_dynamic_vaspace(mm))
-			map_memarea(mm + n, ttb1);
+		map_memarea(mm + n, ttb1);
 }
 
 bool core_mmu_place_tee_ram_at_top(paddr_t paddr)
