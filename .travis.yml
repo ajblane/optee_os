@@ -6,6 +6,7 @@ notifications:
   - email: true
 
 sudo: false
+dist: trusty
 
 cache:
   ccache: true
@@ -59,11 +60,11 @@ before_script:
   # 'apt-get install' cannot be used in the new container-based infrastructure
   # (which is the only allowing caching), so we just build from sources
   # bc is used during kernel configuration
-  - cd $HOME
-  - download http://ftp.gnu.org/gnu/bc/bc-1.06.tar.gz
-  - tar xf $DL_DIR/bc-1.06.tar.gz
-  - (cd bc-1.06 && CC="ccache gcc" ./configure --quiet && $make)
-  - export PATH=${HOME}/bc-1.06/bc:$PATH
+  ##- cd $HOME
+  ##- download http://ftp.gnu.org/gnu/bc/bc-1.06.tar.gz
+  ##- tar xf $DL_DIR/bc-1.06.tar.gz
+  ##- (cd bc-1.06 && CC="ccache gcc" ./configure --quiet && $make)
+  ##- export PATH=${HOME}/bc-1.06/bc:$PATH
   # Tcl/Expect
   - download http://prdownloads.sourceforge.net/tcl/tcl8.6.4-src.tar.gz
   - tar xf $DL_DIR/tcl8.6.4-src.tar.gz
