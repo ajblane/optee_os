@@ -1734,7 +1734,6 @@ static TEE_Result ecc_sign(uint32_t algo, struct ecc_keypair *key,
 {
 	TEE_Result res;
 	int ltc_res;
-	void *r, *s;
 	size_t key_size_bytes;
 	ecc_key ltc_key;
 	struct tee_ltc_prng *prng = tee_ltc_get_prng();
@@ -1755,28 +1754,14 @@ static TEE_Result ecc_sign(uint32_t algo, struct ecc_keypair *key,
 		goto err;
 	}
 
-	ltc_res = mp_init_multi(&r, &s, NULL);
-	if (ltc_res != CRYPT_OK) {
-		res = TEE_ERROR_OUT_OF_MEMORY;
-		goto err;
-	}
-
-	ltc_res = ecc_sign_hash_raw(msg, msg_len, r, s,
+	ltc_res = ecc_sign_hash_rfc7518(msg, msg_len, sig, sig_len,
 				    &prng->state, prng->index, &ltc_key);
 
 	if (ltc_res == CRYPT_OK) {
-		*sig_len = 2 * key_size_bytes;
-		memset(sig, 0, *sig_len);
-		mp_to_unsigned_bin(r, (uint8_t *)sig + *sig_len/2 -
-				   mp_unsigned_bin_size(r));
-		mp_to_unsigned_bin(s, (uint8_t *)sig + *sig_len -
-				   mp_unsigned_bin_size(s));
 		res = TEE_SUCCESS;
 	} else {
 		res = TEE_ERROR_GENERIC;
 	}
-
-	mp_clear_multi(r, s, NULL);
 
 err:
 	return res;
@@ -1789,8 +1774,6 @@ static TEE_Result ecc_verify(uint32_t algo, struct ecc_public_key *key,
 	TEE_Result res;
 	int ltc_stat;
 	int ltc_res;
-	void *r;
-	void *s;
 	void *key_z;
 	size_t key_size_bytes;
 	ecc_key ltc_key;
@@ -1799,7 +1782,7 @@ static TEE_Result ecc_verify(uint32_t algo, struct ecc_public_key *key,
 		return TEE_ERROR_BAD_PARAMETERS;
 	}
 
-	ltc_res = mp_init_multi(&key_z, &r, &s, NULL);
+	ltc_res = mp_init_multi(&key_z, NULL);
 	if (ltc_res != CRYPT_OK) {
 		return TEE_ERROR_OUT_OF_MEMORY;
 	}
@@ -1815,17 +1798,15 @@ static TEE_Result ecc_verify(uint32_t algo, struct ecc_public_key *key,
 		goto out;
 	}
 
-	mp_read_unsigned_bin(r, (uint8_t *)sig, sig_len/2);
-	mp_read_unsigned_bin(s, (uint8_t *)sig + sig_len/2, sig_len/2);
-
-	ltc_res = ecc_verify_hash_raw(r, s, msg, msg_len, &ltc_stat, &ltc_key);
+	ltc_res = ecc_verify_hash_rfc7518(sig, sig_len, msg, msg_len,
+					  &ltc_stat, &ltc_key);
 	if ((ltc_res == CRYPT_OK) && (ltc_stat == 1))
 		res = TEE_SUCCESS;
 	else
 		res = TEE_ERROR_GENERIC;
 
 out:
-	mp_clear_multi(key_z, r, s, NULL);
+	mp_clear_multi(key_z, NULL);
 	return res;
 }
 

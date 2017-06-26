@@ -34,6 +34,8 @@ enum {
 
 #define PK_STD          0x1000
 
+#define PK_MAX_RETRIES  20
+
 int rand_prime(void *N, long len, prng_state *prng, int wprng);
 int rand_bn_bits(void *N, int bits, prng_state *prng, int wprng);
 int rand_bn_range(void *N, void *limit, prng_state *prng, int wprng);
@@ -305,17 +307,17 @@ int  ecc_decrypt_key(const unsigned char *in,  unsigned long  inlen,
                            unsigned char *out, unsigned long *outlen, 
                            ecc_key *key);
 
-int ecc_sign_hash_raw(const unsigned char *in,  unsigned long inlen,
-                            void   *r,   void *s,
-                            prng_state *prng, int wprng, ecc_key *key);
+int ecc_sign_hash_rfc7518(const unsigned char *in,  unsigned long inlen,
+                                unsigned char *out, unsigned long *outlen,
+                                prng_state *prng, int wprng, ecc_key *key);
 
 int  ecc_sign_hash(const unsigned char *in,  unsigned long inlen, 
                          unsigned char *out, unsigned long *outlen, 
                          prng_state *prng, int wprng, ecc_key *key);
 
-int ecc_verify_hash_raw(      void   *r, void   *s,
-                        const unsigned char *hash, unsigned long hashlen,
-                        int *stat, ecc_key *key);
+int ecc_verify_hash_rfc7518(const unsigned char *sig,  unsigned long siglen,
+                            const unsigned char *hash, unsigned long hashlen,
+                            int *stat, ecc_key *key);
 
 int  ecc_verify_hash(const unsigned char *sig,  unsigned long siglen,
                      const unsigned char *hash, unsigned long hashlen, 
