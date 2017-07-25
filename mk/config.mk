@@ -176,6 +176,23 @@ CFG_WITH_USER_TA ?= y
 # case you implement your own TA store
 CFG_REE_FS_TA ?= y
 
+# Support for loading user TAs from a special section in the TEE binary
+# Such TAs are available even before tee-supplicant is available (hence their
+# name), but note that many services exported to TAs may need tee-supplicant,
+# so early use is limited to a subset of the TEE Internal Core API (crypto...)
+# To use this feature, set EARLY_TA to the paths to one or more TA ELF file(s)
+# For example:
+#   EARLY_TA=path/to/8aaaf200-2450-11e4-abe2-0002a5d5c51b.stripped.elf
+# Typical build steps:
+#   $ make ... CFG_EARLY_TA=y # Enable the feature to avoid later recompilation
+#   <build some TAs>
+#   $ make ... EARLY_TA=path/to/TAs # Embbed the TA(s) (will re-linkOP-TEE)
+ifneq ($(EARLY_TA),)
+$(call force,CFG_EARLY_TA,y)
+else
+CFG_EARLY_TA ?= n
+endif
+
 # Enable paging, requires SRAM, can't be enabled by default
 CFG_WITH_PAGER ?= n
 

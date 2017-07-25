@@ -129,6 +129,11 @@ SECTIONS
 
 	.rodata : ALIGN(4) {
 		__rodata_start = .;
+#ifdef CFG_EARLY_TA
+		__rodata_early_ta_start = .;
+		KEEP(*(.rodata.early_ta))
+		__rodata_early_ta_end = .;
+#endif
 		*(.rodata .rodata.* .gnu.linkonce.r.*)
 
 		/*
