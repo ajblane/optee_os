@@ -27,6 +27,7 @@
 #ifndef ELF_LOAD_H
 #define ELF_LOAD_H
 
+#include <sys/queue.h>
 #include <types_ext.h>
 #include <tee_api_types.h>
 
@@ -68,6 +69,8 @@ struct user_ta_store_ops {
 	 * Close a TA handle. Do nothing if @h == NULL.
 	 */
 	void (*close)(struct user_ta_store_handle *h);
+
+	SLIST_ENTRY(user_ta_store_ops) link;
 };
 
 TEE_Result elf_load_init(const struct user_ta_store_ops *ta_store,
