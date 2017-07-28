@@ -94,6 +94,12 @@ libdir = core/lib/libfdt
 include mk/lib.mk
 endif
 
+ifeq ($(CFG_MINIZ),y)
+libname = miniz
+libdir = core/lib/miniz
+include mk/lib.mk
+endif
+
 #
 # Do main source
 #

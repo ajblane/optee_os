@@ -1,0 +1,9 @@
+global-incdirs-y += .
+srcs-y += miniz.c
+cflags-y += -DMINIZ_NO_STDIO=1
+cflags-y += -DMINIZ_NO_ARCHIVE_APIS=1
+cflags-remove-y += -Wmissing-prototypes
+cflags-remove-y += -Wold-style-definition
+cflags-remove-y += -Wstrict-prototypes
+cflags-remove-y += -Wswitch-default
+cflags-remove-y += -Wundef
