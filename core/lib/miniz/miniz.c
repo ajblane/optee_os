@@ -428,6 +428,8 @@ int mz_inflate(mz_streamp pStream, int flush)
     if ((flush == MZ_FINISH) && (first_call))
     {
         /* MZ_FINISH on the first call implies that the input and output buffers are large enough to hold the entire compressed/decompressed file. */
+        if (pStream->next_out == NULL)
+            return MZ_BUF_ERROR;
         decomp_flags |= TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
         in_bytes = pStream->avail_in;
         out_bytes = pStream->avail_out;
@@ -457,8 +459,11 @@ int mz_inflate(mz_streamp pStream, int flush)
     if (pState->m_dict_avail)
     {
         n = MZ_MIN(pState->m_dict_avail, pStream->avail_out);
-        memcpy(pStream->next_out, pState->m_dict + pState->m_dict_ofs, n);
-        pStream->next_out += n;
+        if (pStream->next_out)
+        {
+            memcpy(pStream->next_out, pState->m_dict + pState->m_dict_ofs, n);
+            pStream->next_out += n;
+        }
         pStream->avail_out -= n;
         pStream->total_out += n;
         pState->m_dict_avail -= n;
@@ -482,8 +487,11 @@ int mz_inflate(mz_streamp pStream, int flush)
         pState->m_dict_avail = (mz_uint)out_bytes;
 
         n = MZ_MIN(pState->m_dict_avail, pStream->avail_out);
-        memcpy(pStream->next_out, pState->m_dict + pState->m_dict_ofs, n);
-        pStream->next_out += n;
+        if (pStream->next_out)
+        {
+            memcpy(pStream->next_out, pState->m_dict + pState->m_dict_ofs, n);
+            pStream->next_out += n;
+        }
         pStream->avail_out -= n;
         pStream->total_out += n;
         pState->m_dict_avail -= n;
