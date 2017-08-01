@@ -2,6 +2,8 @@ ifeq ($(CFG_WITH_USER_TA),y)
 srcs-y += user_ta.c
 srcs-$(CFG_REE_FS_TA) += ree_fs_ta.c
 srcs-$(CFG_EARLY_TA) += early_ta.c
+cflags-early_ta.c-y += -DMINIZ_NO_STDIO=1 -DMINIZ_NO_ARCHIVE_APIS=1
+cflags-remove-early_ta.c-y += -Wstrict-prototypes
 endif
 srcs-y += pseudo_ta.c
 srcs-y += elf_load.c

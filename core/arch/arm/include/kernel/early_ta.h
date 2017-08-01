@@ -32,7 +32,9 @@
 
 struct early_ta {
 	TEE_UUID uuid;
+	uint32_t flags;
 	uint32_t size;
+	uint32_t uncompressed_size; /* 0: not compressed */
 	uint8_t ta[]; /* @size bytes */
 };
 

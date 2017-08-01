@@ -28,6 +28,8 @@
 #include <kernel/early_ta.h>
 #include <kernel/linker.h>
 #include <kernel/user_ta.h>
+#include <miniz.h>
+#include <stdio.h>
 #include <string.h>
 #include <trace.h>
 #include <util.h>
@@ -37,6 +39,7 @@
 struct user_ta_store_handle {
 	const struct early_ta *early_ta;
 	size_t offs;
+	struct mz_stream_s strm;
 };
 
 #define for_each_early_ta(_ta) \
@@ -55,11 +58,27 @@ static const struct early_ta *find_early_ta(const TEE_UUID *uuid)
 	return NULL;
 }
 
+static bool decompression_init(struct mz_stream_s *strm,
+			       const struct early_ta *ta)
+{
+	int st;
+
+	strm->next_in = ta->ta;
+	strm->avail_in = ta->size;
+	st = mz_inflateInit(strm);
+	if (st != Z_OK) {
+		DMSG("Early TA decompression initialization error (%d)", st);
+		return false;
+	}
+	return true;
+}
+
 static TEE_Result early_ta_open(const TEE_UUID *uuid,
 				struct user_ta_store_handle **h)
 {
-	const struct early_ta *ta;
 	struct user_ta_store_handle *handle;
+	const struct early_ta *ta;
+	bool st;
 
 	ta = find_early_ta(uuid);
 	if (!ta)
@@ -69,6 +88,15 @@ static TEE_Result early_ta_open(const TEE_UUID *uuid,
 	if (!handle)
 		return TEE_ERROR_OUT_OF_MEMORY;
 
+	if (ta->uncompressed_size) {
+		/* TA is compressed */
+		st = decompression_init(&handle->strm, ta);
+		if (!st) {
+			free(handle);
+			return TEE_ERROR_BAD_FORMAT;
+		}
+
+	}
 	handle->early_ta = ta;
 	*h = handle;
 
@@ -78,12 +106,17 @@ static TEE_Result early_ta_open(const TEE_UUID *uuid,
 static TEE_Result early_ta_get_size(const struct user_ta_store_handle *h,
 				    size_t *size)
 {
-	*size = h->early_ta->size;
+	const struct early_ta *ta = h->early_ta;
+
+	if (ta->uncompressed_size)
+		*size = ta->uncompressed_size;
+	else
+		*size = ta->size;
 	return TEE_SUCCESS;
 }
 
-static TEE_Result early_ta_read(struct user_ta_store_handle *h, void *data,
-				size_t len)
+static TEE_Result read_uncompressed(struct user_ta_store_handle *h, void *data,
+				    size_t len)
 {
 	uint8_t *src = (uint8_t *)h->early_ta->ta + h->offs;
 
@@ -95,8 +128,46 @@ static TEE_Result early_ta_read(struct user_ta_store_handle *h, void *data,
 	return TEE_SUCCESS;
 }
 
+static TEE_Result read_compressed(struct user_ta_store_handle *h, void *data,
+				  size_t len)
+{
+	struct mz_stream_s *strm = &h->strm;
+	size_t out;
+	int st;
+
+	/*
+	 * data may be NULL, which is OK with our modified version of
+	 * mz_inflate()
+	 */
+	strm->next_out = data;
+	strm->avail_out = len;
+	do {
+		/* Loop because each call can decompress as much as 32K */
+		out = strm->total_out;
+		st = mz_inflate(strm, MZ_SYNC_FLUSH);
+		out = strm->total_out - out;
+		DMSG("%zu bytes", out);
+	} while (st == MZ_OK && strm->avail_out);
+	if (st != MZ_OK && st != MZ_STREAM_END) {
+		DMSG("TA decompression error (%d)", st);
+		return TEE_ERROR_GENERIC;
+	}
+	return TEE_SUCCESS;
+}
+
+static TEE_Result early_ta_read(struct user_ta_store_handle *h, void *data,
+				size_t len)
+{
+	if (h->early_ta->uncompressed_size)
+		return read_compressed(h, data, len);
+	else
+		return read_uncompressed(h, data, len);
+}
+
 static void early_ta_close(struct user_ta_store_handle *h)
 {
+	if (h->early_ta->uncompressed_size)
+		mz_inflateEnd(&h->strm);
 	free(h);
 }
 
@@ -111,9 +182,16 @@ static struct user_ta_store_ops ops = {
 static TEE_Result early_ta_init(void)
 {
 	const struct early_ta *ta;
+	char __maybe_unused msg[60] = { '\0', };
 
-	for_each_early_ta(ta)
-		DMSG("Early TA %pUl size %u", (void *)&ta->uuid, ta->size);
+	for_each_early_ta(ta) {
+		if (ta->uncompressed_size)
+			snprintf(msg, sizeof(msg),
+				 " (compressed, uncompressed %u)",
+				 ta->uncompressed_size);
+		DMSG("Early TA %pUl size %u%s", (void *)&ta->uuid, ta->size,
+		     msg);
+	}
 
 	return tee_ta_register_ta_store(&ops);
 }
