@@ -18,7 +18,7 @@ define check-conf-h
 		$(call cfg-vars-by-prefix,$1),			\
 		$(call cfg-make-define,$(var))))';		\
 	guard="_`echo $@ | tr -- -/. ___`_";			\
-	mkdir -p $(dir $@);					\
+	mkdir -p $(dir $@); sync;				\
 	echo "#ifndef $${guard}" >$@.tmp;			\
 	echo "#define $${guard}" >>$@.tmp;			\
 	echo -n "$${cnf}" | sed 's/_nl_ */\n/g' >>$@.tmp;	\
@@ -32,7 +32,7 @@ define check-conf-mk
 	cnf='$(strip $(foreach var,				\
 		$(call cfg-vars-by-prefix,CFG_),		\
 		$(strip $(var)=$($(var))_nl_)))';		\
-	mkdir -p $(dir $@);					\
+	mkdir -p $(dir $@); sync;				\
 	echo "# auto-generated TEE configuration file" >$@.tmp; \
 	echo "# TEE version ${TEE_IMPL_VERSION}" >>$@.tmp; \
 	echo "ARCH=${ARCH}" >>$@.tmp;				\
