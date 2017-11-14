@@ -5,5 +5,5 @@ build:
     pull: true
     options: "-e HOME=/root"
   ci:
-    - sudo apt-get install strace
-    - while [ $? -eq 0 ]; do make -j$(getconf _NPROCESSORS_ONLN) -f Makefile.mkdir-test ; if [ $? -eq 0 ]; then make -f Makefile.mkdir-test clean; else echo "a1.log"; cat a1.log; echo "a2.log"; cat a2.log; false; fi; done
+    #- sudo apt-get install strace
+    - while [ $? -eq 0 ]; do make -j$(getconf _NPROCESSORS_ONLN) -f Makefile.mkdir-test ; if [ $? -eq 0 ]; then make -f Makefile.mkdir-test clean; else false; fi; done

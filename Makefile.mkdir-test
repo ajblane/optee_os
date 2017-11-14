@@ -1,13 +1,12 @@
-AA = a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a
-
-all: a1 a2
+all: a2 a1
 
 a1:
-	mkdir -p $(AA) && echo A >$(AA)/a.txt
+	set -e; true '  CHK     out/arm-plat-stm/conf.mk'; cnf='CFG_ARM32_core=y_nl_ CFG_ARM32_ta_arm32=y_nl_ CFG_ARM64_core=n_nl_ CFG_BOOT_SECONDARY_REQUEST=n_nl_ CFG_BOOT_SYNC_CPU=y_nl_ CFG_CACHE_API=y_nl_ CFG_CORE_CLUSTER_SHIFT=2_nl_ CFG_CORE_HEAP_SIZE=65536_nl_ CFG_CORE_LARGE_PHYS_ADDR=n_nl_ CFG_CORE_RODATA_NOEXEC=n_nl_ CFG_CORE_RWDATA_NOEXEC=y_nl_ CFG_CORE_SANITIZE_KADDRESS=n_nl_ CFG_CORE_SANITIZE_UNDEFINED=n_nl_ CFG_CORE_TZSRAM_EMUL_SIZE=458752_nl_ CFG_CRYPTO=y_nl_ CFG_CRYPTO_AES=y_nl_ CFG_CRYPTO_CBC=y_nl_ CFG_CRYPTO_CBC_MAC=y_nl_ CFG_CRYPTO_CCM=y_nl_ CFG_CRYPTO_CMAC=y_nl_ CFG_CRYPTO_CONCAT_KDF=y_nl_ CFG_CRYPTO_CTR=y_nl_ CFG_CRYPTO_CTS=y_nl_ CFG_CRYPTO_DES=y_nl_ CFG_CRYPTO_DH=y_nl_ CFG_CRYPTO_DSA=y_nl_ CFG_CRYPTO_ECB=y_nl_ CFG_CRYPTO_ECC=y_nl_ CFG_CRYPTO_GCM=y_nl_ CFG_CRYPTO_HKDF=y_nl_ CFG_CRYPTO_HMAC=y_nl_ CFG_CRYPTO_MD5=y_nl_ CFG_CRYPTO_PBKDF2=y_nl_ CFG_CRYPTO_RSA=y_nl_ CFG_CRYPTO_SHA1=y_nl_ CFG_CRYPTO_SHA224=y_nl_ CFG_CRYPTO_SHA256=y_nl_ CFG_CRYPTO_SHA384=y_nl_ CFG_CRYPTO_SHA512=y_nl_ CFG_CRYPTO_SIZE_OPTIMIZATION=y_nl_ CFG_CRYPTO_XTS=y_nl_ CFG_DT=n_nl_ CFG_DTB_MAX_SIZE=0x10000_nl_ CFG_DYN_SHM_CAP=y_nl_ CFG_EARLY_TA=n_nl_ CFG_ENABLE_SCTLR_RR=y_nl_ CFG_ENABLE_SCTLR_Z=y_nl_ CFG_GENERIC_BOOT=y_nl_ CFG_GIC=y_nl_ CFG_GP_SOCKETS=y_nl_ CFG_HWSUPP_MEM_PERM_PXN=n_nl_ CFG_HWSUPP_MEM_PERM_WXN=n_nl_ CFG_KERN_LINKER_ARCH=arm_nl_ CFG_KERN_LINKER_FORMAT=elf32-littlearm_nl_ CFG_LIBUTILS_WITH_ISOC=y_nl_ CFG_LPAE_ADDR_SPACE_SIZE=(1ull << 32)_nl_ CFG_LTC_OPTEE_THREAD=y_nl_ CFG_MMAP_REGIONS=13_nl_ CFG_MSG_LONG_PREFIX_MASK=0x1a_nl_ CFG_NUM_THREADS=2_nl_ CFG_OPTEE_REVISION_MAJOR=2_nl_ CFG_OPTEE_REVISION_MINOR=6_nl_ CFG_PAGED_USER_TA=n_nl_ CFG_PL310=y_nl_ CFG_PL310_LOCKED=y_nl_ CFG_PM_STUBS=y_nl_ CFG_REE_FS=y_nl_ CFG_REE_FS_TA=y_nl_ CFG_RPMB_FS=n_nl_ CFG_RPMB_FS_DEV_ID=0_nl_ CFG_RPMB_WRITE_KEY=n_nl_ CFG_SCTLR_ALIGNMENT_CHECK=y_nl_ CFG_SECURE_DATA_PATH=n_nl_ CFG_SECURE_TIME_SOURCE_CNTPCT=n_nl_ CFG_SECURE_TIME_SOURCE_REE=y_nl_ CFG_STIH_UART=y_nl_ CFG_TA_FLOAT_SUPPORT=y_nl_ CFG_TA_GPROF_SUPPORT=n_nl_ CFG_TEE_API_VERSION=GPD-1.1-dev_nl_ CFG_TEE_CORE_DEBUG=y_nl_ CFG_TEE_CORE_EMBED_INTERNAL_TESTS=y_nl_ CFG_TEE_CORE_LOG_LEVEL=1_nl_ CFG_TEE_CORE_MALLOC_DEBUG=n_nl_ CFG_TEE_CORE_TA_TRACE=y_nl_ CFG_TEE_CORE_USER_MEM_DEBUG=1_nl_ CFG_TEE_FW_IMPL_VERSION=FW_IMPL_UNDEF_nl_ CFG_TEE_FW_MANUFACTURER=FW_MAN_UNDEF_nl_ CFG_TEE_IMPL_DESCR=OPTEE_nl_ CFG_TEE_MANUFACTURER=LINARO_nl_ CFG_TEE_TA_LOG_LEVEL=1_nl_ CFG_TEE_TA_MALLOC_DEBUG=n_nl_ CFG_ULIBS_GPROF=n_nl_ CFG_UNWIND=y_nl_ CFG_WITH_LPAE=n_nl_ CFG_WITH_PAGER=n_nl_ CFG_WITH_SOFTWARE_PRNG=n_nl_ CFG_WITH_STACK_CANARIES=y_nl_ CFG_WITH_STATS=y_nl_ CFG_WITH_USER_TA=y_nl_ CFG_WITH_VFP=y_nl_'; mkdir -p out/arm-plat-stm/; sync; echo "# auto-generated TEE configuration file" >out/arm-plat-stm/conf.mk.tmp; echo "# TEE version 2637e5d3" >>out/arm-plat-stm/conf.mk.tmp; echo "ARCH=arm" >>out/arm-plat-stm/conf.mk.tmp; echo "PLATFORM=stm" >>out/arm-plat-stm/conf.mk.tmp; echo "PLATFORM_FLAVOR=b2260" >>out/arm-plat-stm/conf.mk.tmp; echo -n "$${cnf}" | sed 's/_nl_ */\n/g' >>out/arm-plat-stm/conf.mk.tmp; 	if [ -r out/arm-plat-stm/conf.mk ] && cmp -s out/arm-plat-stm/conf.mk out/arm-plat-stm/conf.mk.tmp; then rm -f out/arm-plat-stm/conf.mk.tmp; else true '  UPD     out/arm-plat-stm/conf.mk'; mv out/arm-plat-stm/conf.mk.tmp out/arm-plat-stm/conf.mk; fi
+
 
 a2:
-	mkdir -p $(AA) && echo B >$(AA)/b.txt
+	mkdir -p out/arm-plat-stm/core
 
 clean:
-	rm -rf a a*.log
+	rm -rf out/arm-plat-stm
 
