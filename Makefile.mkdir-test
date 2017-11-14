@@ -1,0 +1,13 @@
+AA = a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a
+
+all: a1 a2
+
+a1:
+	mkdir -p $(AA) && echo A >$(AA)/a.txt
+
+a2:
+	mkdir -p $(AA) && echo B >$(AA)/b.txt
+
+clean:
+	rm -rf a a*.log
+
