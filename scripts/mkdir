@@ -1,0 +1,9 @@
+#!/bin/bash
+f=$(mktemp)
+strace -o $f /bin/mkdir $*
+if [ $? -eq 0 ]; then
+  rm -f $f
+else
+  cat $f
+  false
+fi
