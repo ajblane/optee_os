@@ -101,14 +101,14 @@ link-script-extra-deps += $(conf-file)
 cleanfiles += $(link-script-pp) $(link-script-dep)
 $(link-script-pp): $(link-script) $(link-script-extra-deps)
 	@$(cmd-echo-silent) '  CPP     $@'
-	@mkdir -p $(dir $@)
+	@mkdir -v -p $(dir $@)
 	$(q)$(CPPcore) -Wp,-P,-MT,$@,-MD,$(link-script-dep) \
 		$(link-script-cppflags) $< > $@
 
 define update-buildcount
 	@$(cmd-echo-silent) '  UPD     $(1)'
 	$(q)if [ ! -f $(1) ]; then \
-		mkdir -p $(dir $(1)); \
+		mkdir -v -p $(dir $(1)); \
 		echo 1 >$(1); \
 	else \
 		expr 0`cat $(1)` + 1 >$(1); \

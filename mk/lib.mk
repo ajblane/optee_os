@@ -26,12 +26,12 @@ define process-lib
 ifeq ($(lib-use-ld), y)
 $(lib-libfile): $(objs)
 	@echo '  LD      $$@'
-	@mkdir -p $$(dir $$@)
+	@mkdir -v -p $$(dir $$@)
 	$$(q)$$(LD$(sm)) $(lib-ldflags) -o $$@ $$^
 else
 $(lib-libfile): $(objs)
 	@$(cmd-echo-silent) '  AR      $$@'
-	@mkdir -p $$(dir $$@)
+	@mkdir -v -p $$(dir $$@)
 	$$(q)rm -f $$@ && $$(AR$(sm)) rcs $$@ $$^
 endif
 endef #process-lib

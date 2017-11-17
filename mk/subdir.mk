@@ -74,7 +74,7 @@ subdir-$2 := $$(sub-dir)
 recipe-$2 := $$(recipe-$1)
 $2: $$(depends-$1)
 	@$(cmd-echo-silent) '  GEN     $2'
-	$(q)mkdir -p $4
+	$(q)mkdir -v -p $4
 	$(q)$$(recipe-$2)
 
 cflags-$$(oname) 		:= $$(cflags-y) $$(cflags-$(1)-y)

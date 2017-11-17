@@ -128,7 +128,7 @@ $2: $1 FORCE-GENSRC
 	    $$(filter-out $$(comp-cmd-$2), $$(old-cmd-$2)) \
 	    $$(filter-out $$(old-cmd-$2), $$(comp-cmd-$2))), \
 		@set -e ;\
-		mkdir -p $$(dir $2) ;\
+		mkdir -v -p $$(dir $2) ;\
 		$$(echo-check-$2) '  CHECK   $$<' ;\
 		$$(echo-check-cmd-$2) ;\
 		$$(check-cmd-$2) ;\
@@ -197,7 +197,7 @@ $3: $1 $(conf-file) FORCE
 	    $$(filter-out $$(comp-cmd-$3), $$(old-cmd-$3)) \
 	    $$(filter-out $$(old-cmd-$3), $$(comp-cmd-$3))), \
 		@set -e ;\
-		mkdir -p $$(dir $2) $$(dir $3) ;\
+		mkdir -v -p $$(dir $2) $$(dir $3) ;\
 		$(cmd-echo) $$(subst \",\\\",$$(comp-cmd-$3)) ;\
 		$$(comp-cmd-$3) ;\
 		echo "old-cmd-$3 := $$(subst \",\\\",$$(comp-cmd-$3))" > \
@@ -209,7 +209,7 @@ guard-$2 := $$(subst -,_,$$(subst .,_,$$(subst /,_,$2)))
 $(2): $(3)
 	$(q)set -e;							\
 	$(cmd-echo-silent) '  CHK     $$@';			\
-	mkdir -p $$(dir $$@);					\
+	mkdir -v -p $$(dir $$@);					\
 	echo "#ifndef $$(guard-$2)" >$$@.tmp;			\
 	echo "#define $$(guard-$2)" >>$$@.tmp;			\
 	sed -ne 's|^==>\([^ ]*\) [\$$$$#]*\([-0-9]*\) \([^@/]*\).*|#define \1\t\2\t/* \3*/|p' \
