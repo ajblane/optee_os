@@ -271,6 +271,11 @@ CFG_GP_SOCKETS ?= y
 # invocation parameters referring to specific secure memories).
 CFG_SECURE_DATA_PATH ?= n
 
+# Enable storage for TAs in secure storage, depends on CFG_REE_FS=y
+# TA binaries are stored encrypted in the REE FS and are protected by
+# metadata in secure storage.
+CFG_SECSTOR_TA ?= y
+
 # Define the number of cores per cluster used in calculating core position.
 # The cluster number is shifted by this value and added to the core ID,
 # so its value represents log2(cores/cluster).
