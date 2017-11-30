@@ -174,6 +174,31 @@ out:
 	return res;
 }
 
+static void uuid_from_octets(TEE_UUID *d, const uint8_t s[16])
+{
+        d->timeLow = (s[0] << 24) | (s[1] << 16) | (s[2] << 8) | s[3];
+        d->timeMid = (s[4] << 8) | s[5];
+        d->timeHiAndVersion = (s[6] << 8) | s[7];
+        memcpy(d->clockSeqAndNode, s + 8, sizeof(d->clockSeqAndNode));
+}
+
+static TEE_Result __maybe_unused uninstall(uint32_t param_types,
+					   TEE_Param params[TEE_NUM_PARAMS])
+{
+	TEE_UUID uuid;
+	const uint32_t exp_pt = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
+						TEE_PARAM_TYPE_NONE,
+						TEE_PARAM_TYPE_NONE,
+						TEE_PARAM_TYPE_NONE);
+
+	if (param_types != exp_pt ||
+	    params->memref.size != 16)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	uuid_from_octets(&uuid, params->memref.buffer);
+	return tee_tadb_ta_delete(&uuid);
+}
+
 static TEE_Result invoke_command(void *sess_ctx __unused, uint32_t cmd_id,
 				 uint32_t param_types,
 				 TEE_Param params[TEE_NUM_PARAMS])
@@ -181,6 +206,10 @@ static TEE_Result invoke_command(void *sess_ctx __unused, uint32_t cmd_id,
 	switch (cmd_id) {
 	case PTA_SECSTOR_TA_MGMT_BOOTSTRAP:
 		return bootstrap(param_types, params);
+#ifdef CFG_SECSTOR_TA_MGMT_PTA_UNINSTALL
+	case PTA_SECSTOR_TA_MGMT_UNINSTALL:
+		return uninstall(param_types, params);
+#endif
 	default:
 		break;
 	}

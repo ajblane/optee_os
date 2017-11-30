@@ -16,6 +16,13 @@
  */
 #define PTA_SECSTOR_TA_MGMT_BOOTSTRAP	0
 
+/*
+ * Uninstall a Trusted Application from secure storage.
+ *
+ * [in]		memref[0]: the UUID of the TA
+ */
+#define PTA_SECSTOR_TA_MGMT_UNINSTALL	1
+
 #define PTA_SECSTOR_TA_MGMT_UUID { 0x6e256cba, 0xfc4d, 0x4941, { \
 				   0xad, 0x09, 0x2c, 0xa1, 0x86, 0x03, 0x42, \
 				   0xdd } }
