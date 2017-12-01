@@ -299,7 +299,8 @@ static TEE_Result tadb_update_payload(void *ctx, TEE_OperationMode mode,
 	size_t sz = len;
 
 	res = crypto_authenc_update_payload(ctx, TADB_AUTH_ENC_ALG, mode,
-					    (const uint8_t *)src, len, dst, &sz);
+					    (const uint8_t *)src, len, dst,
+					    &sz);
 	assert(res || sz == len);
 	return res;
 }
