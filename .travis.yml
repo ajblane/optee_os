@@ -16,14 +16,14 @@ git:
   depth: 1000000
 
 before_install:
-  # Install the 32-bit cross compiler. We're using an older version here (4.9)
-  # because some Android setups still use this version which can cause build
-  # errors not caught by later GCC versions, see
+  # Install the 32-bit cross compiler. We're using an Android toolchain here
+  # to hopefully catch some errors not caught by later GCC versions, see
   # https://github.com/OP-TEE/optee_os/issues/1998.
-  - wget http://releases.linaro.org/archive/15.02/components/toolchain/binaries/arm-linux-gnueabihf/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf.tar.xz
-  - tar xf gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf.tar.xz
-  - export PATH=${PWD}/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf/bin:${PATH}
-  - arm-linux-gnueabihf-gcc --version
+  - wget https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/master.tar.gz
+  - mkdir ${PWD}/arm-linux-androideabi-gcc-4.9
+  - tar -C ${PWD}/arm-linux-androideabi-gcc-4.9 -xf master.tar.gz
+  - export PATH=${PWD}/arm-linux-androideabi-gcc-4.9/bin:${PATH}
+  - arm-linux-androideabi-gcc --version
 
 before_script:
   # Store the home repository
@@ -104,7 +104,7 @@ script:
   - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then if [ "$(git rev-list --count HEAD^1..HEAD^2)" -gt 1 ]; then checkdiff $(git rev-parse HEAD^1) $(git rev-parse HEAD^2); fi; fi
 
   # Run regression tests (xtest in QEMU)
-  - (cd ${HOME}/optee_repo/build && $make check CROSS_COMPILE="ccache arm-linux-gnueabihf-" AARCH32_CROSS_COMPILE=arm-linux-gnueabihf- CFG_TEE_CORE_DEBUG=y DUMP_LOGS_ON_ERROR=1)
+  - (cd ${HOME}/optee_repo/build && $make check CROSS_COMPILE="ccache arm-linux-androideabi-" AARCH32_CROSS_COMPILE=arm-linux-androideabi- CFG_TEE_CORE_DEBUG=y DUMP_LOGS_ON_ERROR=1)
 
 env:
   global:
@@ -116,6 +116,6 @@ addons:
       name: "OP-TEE/optee_os"
       description: "Build submitted via Travis CI"
     notification_email: op-tee@linaro.org
-    build_command_prepend: "cov-configure --comptype gcc --compiler arm-linux-gnueabihf-gcc --template"
+    build_command_prepend: "cov-configure --comptype gcc --compiler arm-linux-androideabi-gcc --template"
     build_command: "make"
     branch_pattern: coverity_scan
