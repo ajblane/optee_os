@@ -433,6 +433,7 @@ static void user_ta_ctx_destroy(struct tee_ta_ctx *ctx)
 	TAILQ_FOREACH(elf, &utc->elfs, link)
 		release_ta_memory_by_mobj(elf->mobj_code);
 	release_ta_memory_by_mobj(utc->mobj_stack);
+	release_ta_memory_by_mobj(utc->mobj_exidx);
 
 	/*
 	 * Close sessions opened by this TA
@@ -446,6 +447,7 @@ static void user_ta_ctx_destroy(struct tee_ta_ctx *ctx)
 
 	vm_info_final(utc);
 	mobj_free(utc->mobj_stack);
+	mobj_free(utc->mobj_exidx);
 	free_elfs(&utc->elfs);
 
 	/* Free cryp states created by this TA */
@@ -824,6 +826,124 @@ static TEE_Result set_seg_prot(struct user_ta_ctx *utc,
 	return res;
 }
 
+#ifdef CFG_UNWIND
+
+/* An item in the exception index table */
+struct unwind_idx {
+	uint32_t offset;
+	uint32_t insn;
+};
+
+#define	EXIDX_CANTUNWIND 1
+
+static uint32_t offset_prel31(uint32_t addr, int32_t offset)
+{
+	return (addr & ~0x7FFFFFFFUL) | ((addr + offset) & 0x7FFFFFFFUL);
+}
+
+static void relocate_exidx(void *exidx, size_t exidx_sz, int32_t offset)
+{
+	size_t num_items = exidx_sz / sizeof(struct unwind_idx);
+	struct unwind_idx *start = (struct unwind_idx *)exidx;
+	size_t n;
+
+	start = (struct unwind_idx *)exidx;
+	for (n = 0; n < num_items; n++) {
+		struct unwind_idx *item = &start[n];
+
+		/* offset to the start of the function has to be adjusted */
+		item->offset = offset_prel31(item->offset, offset);
+
+		if (item->insn == EXIDX_CANTUNWIND)
+			continue;
+		if (item->insn & BIT32(31)) {
+			/* insn is a table entry itself */
+			continue;
+		}
+		/*
+		 * insn is an offset to an entry in .ARM.extab so it has to be
+		 * adjusted
+		 */
+		item->insn = offset_prel31(item->insn, offset);
+	}
+}
+
+/*
+ * 32-bit TAs: set the address and size of the exception index table (EXIDX).
+ * If the TA contains only one ELF, we point to its table. Otherwise, a
+ * consolidated table is made by concatenating the tables found in each ELF and
+ * adjusting their content to account for the offset relative to the original
+ * location.
+ */
+static TEE_Result set_exidx(struct user_ta_ctx *utc)
+{
+	struct user_ta_elf *exe;
+	struct user_ta_elf *elf;
+	vaddr_t exidx;
+	size_t exidx_sz = 0;
+	TEE_Result res;
+	uint8_t *p;
+
+	if (!utc->is_32bit)
+		return TEE_SUCCESS;
+
+	exe = TAILQ_FIRST(&utc->elfs);
+	if (!TAILQ_NEXT(exe, link)) {
+		/* We have a single ELF: simply reference its table */
+		utc->exidx_start = exe->exidx_start;
+		utc->exidx_size = exe->exidx_size;
+		return TEE_SUCCESS;
+	}
+
+	TAILQ_FOREACH(elf, &utc->elfs, link)
+		exidx_sz += elf->exidx_size;
+
+	utc->mobj_exidx = alloc_ta_mem(exidx_sz);
+	if (!utc->mobj_exidx)
+		return TEE_ERROR_OUT_OF_MEMORY;
+	exidx = 0;
+	res = vm_map(utc, &exidx, exidx_sz, TEE_MATTR_UR | TEE_MATTR_PRW,
+		     utc->mobj_exidx, 0);
+	if (res)
+		goto err;
+	DMSG("New EXIDX table mapped at 0x%" PRIxVA " size %zu",
+	     exidx, exidx_sz);
+
+	p = (void *)exidx;
+	TAILQ_FOREACH(elf, &utc->elfs, link) {
+		void *e_exidx = (void *)(elf->exidx_start + elf->load_addr);
+		size_t e_exidx_sz = elf->exidx_size;
+		int32_t offs = (int32_t)((vaddr_t)e_exidx - (vaddr_t)p);
+
+		memcpy(p, e_exidx, e_exidx_sz);
+		relocate_exidx(p, e_exidx_sz, offs);
+		p += e_exidx_sz;
+	}
+
+	res = vm_set_prot(utc, exidx,
+			  ROUNDUP(exidx_sz, SMALL_PAGE_SIZE),
+			  TEE_MATTR_UR);
+	if (res)
+		goto err;
+
+	utc->exidx_start = exidx - utc->load_addr;
+	utc->exidx_size = exidx_sz;
+
+	return TEE_SUCCESS;
+err:
+	mobj_free(utc->mobj_exidx);
+	return res;
+}
+
+#else /* CFG_UNWIND */
+
+static TEE_Result set_exidx(struct user_ta_ctx *utc __unused)
+{
+	return TEE_SUCCESS;
+}
+
+#endif /* CFG_UNWIND */
+
 TEE_Result tee_ta_init_user_ta_session(const TEE_UUID *uuid,
 				       struct tee_ta_session *s)
 {
@@ -886,8 +1006,9 @@ TEE_Result tee_ta_init_user_ta_session(const TEE_UUID *uuid,
 	}
 
 	utc->load_addr = exe->load_addr;
-	utc->exidx_start = exe->exidx_start;
-	utc->exidx_size = exe->exidx_size;
+	res = set_exidx(utc);
+	if (res)
+		goto err;
 
 	ta_head = (struct ta_head *)(vaddr_t)utc->load_addr;
 
