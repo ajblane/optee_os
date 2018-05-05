@@ -386,10 +386,14 @@ static void *raw_realloc(void *ptr, size_t hdr_size, size_t ftr_size,
 	bufsize s;
 
 	/* Compute total size */
+	DMSG("hdr_size=%zu ftr_size=%zu pl_size=%zu", hdr_size, ftr_size,
+	     pl_size);
 	if (ADD_OVERFLOW(pl_size, hdr_size, &s))
 		goto out;
+	DMSG("s=%ld", s);
 	if (ADD_OVERFLOW(s, ftr_size, &s))
 		goto out;
+	DMSG("s=%ld", s);
 
 	raw_malloc_validate_pools();
 
