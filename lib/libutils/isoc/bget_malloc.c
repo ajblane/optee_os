@@ -323,11 +323,15 @@ static void *raw_malloc(size_t hdr_size, size_t ftr_size, size_t pl_size,
 
 	raw_malloc_validate_pools();
 
+	DMSG("hdr_size=%zu ftr_size=%zu pl_size=%zu", hdr_size, ftr_size,
+	     pl_size);
 	/* Compute total size */
 	if (ADD_OVERFLOW(pl_size, hdr_size, &s))
 		goto out;
+	DMSG("s=%ld", s);
 	if (ADD_OVERFLOW(s, ftr_size, &s))
 		goto out;
+	DMSG("s=%ld", s);
 
 	/* BGET doesn't like 0 sized allocations */
 	if (!s)
